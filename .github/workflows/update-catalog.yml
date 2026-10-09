@@ -1,30 +1,24 @@
 name: Update CelesTrak catalog
-
 on:
   schedule:
-    - cron: '0 */6 * * *'   # Toutes les 6 heures
+    - cron: '0 */6 * * *'
   workflow_dispatch:
-
-permissions:
-  contents: write
-
 jobs:
   update:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download CelesTrak catalog
+      - uses: actions/checkout@v4
+      - name: Download catalog
         run: |
           mkdir -p data
           curl -sL "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json" -o data/all_active.json
           ls -lh data/
-
-      - name: Commit and push
+      - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/all_active.json
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update CelesTrak catalog [skip ci]"
+          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update catalog [skip ci]"
           git push
