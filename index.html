@@ -569,7 +569,7 @@ body {
       <em>Liberté</em>
       <em>Égalité</em>
       <em>Fraternité</em>
-      <div class="ref-legale">Système TACTICAL-ORBIT · v3.3 · NORAD 25544</div>
+      <div class="ref-legale">Système TACTICAL-ORBIT · v3.4 · NORAD 25544</div>
     </div>
   </div>
 </div>
@@ -644,7 +644,7 @@ body {
     </div>
     <div class="stat">
       <div class="stat-label">Prochaine actualisation</div>
-      <div class="stat-value utc"><span id="countdown">60</span>s</div>
+      <div class="stat-value utc"><span id="countdown">120</span>s</div>
     </div>
   </div>
 
@@ -698,7 +698,7 @@ body {
   <div>République Française — Ministère des Armées</div>
   <div class="mention-legale">
     Cellule de veille stratégique · Surveillance aérienne ADS-B et orbitale SGP4<br>
-    Sources : adsb.lol · adsb.fi · airplanes.live · CelesTrak OMM · OpenStreetMap<br>
+    Sources : adsb.lol · CelesTrak OMM · OpenStreetMap<br>
     Traitement : Cloudflare Worker · satellite.js · Leaflet
   </div>
   <div class="copyright-footer">
@@ -710,7 +710,7 @@ body {
 'use strict';
 
 const CONFIG = {
-  refreshInterval: 60,
+  refreshInterval: 120,   // ✅ 120s au lieu de 60 pour éviter le 429 Cloudflare
   radiusNm: 250,
   minElevation: 5,
   maxListItems: 30,
@@ -741,8 +741,22 @@ const state = {
   satMarkers: [],
   observerMarker: null,
   catalogLoaded: false,
-  currentSource: '—'
+  currentSource: '—',
+  lastAdsBRefresh: 0,
+  isVisible: true
 };
+
+// ============================================================
+// PAUSE AUTOMATIQUE QUAND L'ONGLET EST CACHÉ
+// ============================================================
+document.addEventListener('visibilitychange', () => {
+  state.isVisible = !document.hidden;
+  if (!state.isVisible) {
+    console.log('⏸️ Onglet caché — pause des refreshs pour économiser le quota Worker');
+  } else {
+    console.log('▶️ Onglet visible — reprise des refreshs');
+  }
+});
 
 const map = L.map('map', {
   center: [state.zone.lat, state.zone.lon],
@@ -810,8 +824,6 @@ function satColor(s) {
 
 // ============================================================
 // CONVERSION OMM → TLE
-// Le catalogue CelesTrak JSON est au format OMM (paramètres Kepler)
-// satellite.js a besoin des lignes TLE brutes → on les reconstruit
 // ============================================================
 function ommToTle(sat) {
   try {
@@ -819,7 +831,6 @@ function ommToTle(sat) {
     const classification = sat.CLASSIFICATION_TYPE || 'U';
     const intlDesig = (sat.OBJECT_ID || '').replace(/[^A-Z0-9]/g, '').padEnd(8, ' ').slice(0, 8);
 
-    // Epoch : YYYY-MM-DDTHH:MM:SS → YYDDD.DDDDDDDD
     const epochDate = new Date(sat.EPOCH + 'Z');
     if (isNaN(epochDate.getTime())) return null;
 
@@ -830,13 +841,11 @@ function ommToTle(sat) {
     const dayStr = dayOfYear.toFixed(8).padStart(12, '0');
     const epoch = yearStr + dayStr;
 
-    // Mean motion dot (format +.NNNNNNNN)
     const mmDotRaw = sat.MEAN_MOTION_DOT || 0;
     const mmDotSign = mmDotRaw >= 0 ? '+' : '-';
-    const mmDotAbs = Math.abs(mmDotRaw).toFixed(8).slice(2); // enlever "0."
+    const mmDotAbs = Math.abs(mmDotRaw).toFixed(8).slice(2);
     const mmDot = `${mmDotSign}.${mmDotAbs}`;
 
-    // Bstar (format scientifique NN-N)
     const bstarRaw = sat.BSTAR || 0;
     let bstar = ' 00000-0';
     if (bstarRaw !== 0) {
@@ -849,10 +858,8 @@ function ommToTle(sat) {
       bstar = `${sign}${mantStr}${expSign}${expStr}`;
     }
 
-    // Ligne 1 (69 chars)
     const line1 = `1 ${norad}${classification} ${intlDesig} ${epoch} ${mmDot} ${bstar} 0  999`;
 
-    // Ligne 2 (69 chars)
     const inc = sat.INCLINATION.toFixed(4).padStart(8, ' ');
     const raan = sat.RA_OF_ASC_NODE.toFixed(4).padStart(8, ' ');
     const ecc = String(sat.ECCENTRICITY).replace('0.', '').padStart(7, '0').slice(0, 7);
@@ -861,59 +868,50 @@ function ommToTle(sat) {
     const mm = sat.MEAN_MOTION.toFixed(8).padStart(11, ' ');
     const rev = String(sat.REV_AT_EPOCH || 0).padStart(5, ' ');
 
-    const line2 = `2 ${norad} ${inc} ${raoStr(raan)} ${ecc} ${argp} ${ma} ${mm}${rev}`;
-    // Simplification : on reconstruit sans checksum (satellite.js n'en a pas besoin)
-    const line2Simple = `2 ${norad} ${inc} ${raan} ${ecc} ${argp} ${ma} ${mm}${rev}`;
+    const line2 = `2 ${norad} ${inc} ${raan} ${ecc} ${argp} ${ma} ${mm}${rev}`;
 
-    return { line1: line1.padEnd(69, ' ').slice(0, 69), line2: line2Simple.padEnd(69, ' ').slice(0, 69) };
+    return {
+      line1: line1.padEnd(69, ' ').slice(0, 69),
+      line2: line2.padEnd(69, ' ').slice(0, 69)
+    };
   } catch (e) {
     return null;
   }
 }
 
-function raoStr(s) { return s; } // helper no-op
-
 // ============================================================
-// FETCH WORKER
+// FETCH WORKER — 1 seule tentative (évite de saturer)
 // ============================================================
-async function fetchViaWorker(targetUrl, timeoutMs = 20000, maxRetries = 2) {
+async function fetchViaWorker(targetUrl, timeoutMs = 20000) {
   const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(proxyUrl, { signal: controller.signal });
+    clearTimeout(timeout);
 
-    try {
-      const res = await fetch(proxyUrl, { signal: controller.signal });
-      clearTimeout(timeout);
+    const source = res.headers.get('X-Source');
+    if (source) state.currentSource = source;
 
-      const source = res.headers.get('X-Source');
-      if (source) state.currentSource = source;
-
-      if (res.status === 429 || res.status === 502) {
-        const wait = Math.pow(2, attempt) * 10000;
-        console.warn(`⏳ ${res.status} (tentative ${attempt + 1}/${maxRetries}), retry dans ${wait/1000}s…`);
-        await new Promise(r => setTimeout(r, wait));
-        continue;
-      }
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const text = await res.text();
-      try { return JSON.parse(text); } catch { return text; }
-    } catch (e) {
-      clearTimeout(timeout);
-      if (attempt === maxRetries - 1) throw new Error(`Worker: ${e.message}`);
-      const wait = Math.pow(2, attempt) * 5000;
-      console.warn(`⚠️ Erreur (${e.message}), retry dans ${wait/1000}s…`);
-      await new Promise(r => setTimeout(r, wait));
+    // ✅ Ne pas retenter sur 429 — attendre le prochain cycle
+    if (res.status === 429) {
+      console.warn('⏳ 429 reçu — attente du prochain cycle (pas de retry immédiat)');
+      throw new Error('429 Too Many Requests');
     }
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const text = await res.text();
+    try { return JSON.parse(text); } catch { return text; }
+  } catch (e) {
+    clearTimeout(timeout);
+    throw e;
   }
-  throw new Error('Worker: retries épuisés');
 }
 
 // ============================================================
-// AVIONS
+// FETCH AVIONS
 // ============================================================
 async function fetchPlanes() {
   const { lat, lon } = state.zone;
@@ -922,7 +920,7 @@ async function fetchPlanes() {
 
   try {
     console.log(`📡 ADS-B via Worker…`);
-    const data = await fetchViaWorker(targetUrl, 20000, 2);
+    const data = await fetchViaWorker(targetUrl);
     const ac = data.ac || [];
     if (!Array.isArray(ac)) throw new Error('Format invalide');
 
@@ -951,13 +949,13 @@ async function fetchPlanes() {
     planes.sort((a, b) => a.dist - b.dist);
     return planes;
   } catch (e) {
-    console.error(`Erreur fetch avions:`, e);
+    console.error(`Erreur fetch avions:`, e.message);
     return [];
   }
 }
 
 // ============================================================
-// CATALOGUE SATELLITES — conversion OMM → TLE
+// CATALOGUE SATELLITES — chargé UNE SEULE FOIS
 // ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
@@ -965,7 +963,6 @@ async function loadSatelliteCatalog() {
   let catalog = null;
   let source = '—';
 
-  // 1. Essayer le catalogue local
   try {
     console.log('📡 Chargement catalogue local…');
     const res = await fetch('data/all_active.json');
@@ -985,7 +982,6 @@ async function loadSatelliteCatalog() {
 
   console.log(`📦 ${catalog.length} entrées (source: ${source})`);
 
-  // Détecter le format : OMM ou TLE brut ?
   const first = catalog[0];
   const hasTleLines = !!(first.TLE_LINE1 && first.TLE_LINE2);
   const isOmm = !!(first.MEAN_MOTION && first.INCLINATION && first.EPOCH);
@@ -1000,11 +996,9 @@ async function loadSatelliteCatalog() {
       let l1, l2;
 
       if (sat.TLE_LINE1 && sat.TLE_LINE2) {
-        // Format TLE brut
         l1 = sat.TLE_LINE1;
         l2 = sat.TLE_LINE2;
       } else if (sat.MEAN_MOTION && sat.INCLINATION && sat.EPOCH) {
-        // Format OMM → convertir en TLE
         const tle = ommToTle(sat);
         if (!tle) { noTle++; continue; }
         l1 = tle.line1;
@@ -1212,6 +1206,12 @@ function renderSatsList(sats) {
 }
 
 async function refresh() {
+  // ✅ Ne rien faire si l'onglet est caché
+  if (!state.isVisible) {
+    console.log('⏸️ Refresh annulé (onglet caché)');
+    return;
+  }
+
   const utc = formatUTC();
   document.getElementById("stat-utc").textContent = utc;
   document.getElementById("ov-utc").textContent = utc;
@@ -1242,6 +1242,7 @@ async function refresh() {
 function startCountdown() {
   state.countdown = CONFIG.refreshInterval;
   setInterval(() => {
+    if (!state.isVisible) return;
     state.countdown--;
     document.getElementById("countdown").textContent = state.countdown;
     if (state.countdown <= 0) {
