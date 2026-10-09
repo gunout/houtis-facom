@@ -230,6 +230,16 @@ body {
   color: var(--blanc);
   border-color: var(--rouge-marianne);
 }
+.controls button.btn-vert {
+  border-color: #16a34a;
+  color: #16a34a;
+}
+.controls button.btn-vert:hover { background: #dcfce7; }
+.controls button.btn-vert.active {
+  background: #16a34a;
+  color: var(--blanc);
+  border-color: #16a34a;
+}
 .stats-bar {
   background: var(--blanc);
   border: 1px solid var(--gris-bordure);
@@ -569,7 +579,7 @@ body {
       <em>Liberté</em>
       <em>Égalité</em>
       <em>Fraternité</em>
-      <div class="ref-legale">Système TACTICAL-ORBIT · v4.0 · NORAD 25544</div>
+      <div class="ref-legale">Système TACTICAL-ORBIT · v4.1 · NORAD 25544</div>
     </div>
   </div>
 </div>
@@ -619,6 +629,8 @@ body {
     <button id="btn-refresh">⟳ RAFRAÎCHIR</button>
     <button id="btn-toggle-mil" class="btn-rouge">🎖️ MILITAIRE UNIQUEMENT</button>
     <button id="btn-toggle-sats">🛰️ SATELLITES ON/OFF</button>
+    <button id="btn-export-csv">📥 EXPORT CSV</button>
+    <button id="btn-toggle-auto-csv" class="btn-vert">🔄 AUTO CSV ON/OFF</button>
   </div>
 
   <div class="stats-bar">
@@ -699,7 +711,7 @@ body {
   <div class="mention-legale">
     Cellule de veille stratégique · Surveillance aérienne ADS-B et orbitale SGP4<br>
     Sources : adsb.fi (via Deno Deploy) · CelesTrak · OpenStreetMap<br>
-    Traitement : Deno Deploy · satellite.js · Leaflet
+    Traitement : Deno Deploy · satellite.js · Leaflet · Export CSV
   </div>
   <div class="copyright-footer">
     © <span id="copyrightYear">2026</span> · <span class="sig">HOUTIS-FACOM</span> · gunout · Tous droits réservés
@@ -714,7 +726,6 @@ const CONFIG = {
   radiusNm: 250,
   minElevation: 5,
   maxListItems: 30,
-  // ✅ PROXY DENO DEPLOY (remplace Cloudflare)
   workerUrl: 'https://facom.gunout.deno.net',
   militaryPrefixes: [
     "RCH","REACH","DUKE","MAGIC","HAWK","VIPER","TITAN","SPAR","EVAC",
@@ -745,6 +756,103 @@ const state = {
   currentSource: '—',
   isVisible: true
 };
+
+// ============================================================
+// EXPORT CSV
+// ============================================================
+let autoCsvInterval = null;
+let csvExportCount = 0;
+
+function buildCsvContent(planes, sats) {
+  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const zone = state.zone.name.replace(/[",\n]/g, '');
+
+  const header = [
+    'timestamp_utc', 'type', 'zone',
+    'id', 'name',
+    'lat', 'lon',
+    'alt_ft', 'alt_km', 'vel_kmh',
+    'az', 'el', 'dist_km',
+    'militaire'
+  ].join(',');
+
+  const lines = [header];
+
+  const planesToExport = state.militaryOnly ? planes.filter(p => p.military) : planes;
+  for (const p of planesToExport) {
+    if (!isValidCoord(p.lat, p.lon)) continue;
+    const row = [
+      now, 'plane', zone,
+      p.icao24, `"${(p.callsign || '').replace(/"/g, '""')}"`,
+      p.lat.toFixed(6), p.lon.toFixed(6),
+      p.altFt || '', (p.altM ? (p.altM / 1000).toFixed(2) : ''), p.velKmh || '',
+      p.az.toFixed(1), p.el.toFixed(1), p.dist.toFixed(2),
+      p.military ? 'OUI' : 'NON'
+    ].join(',');
+    lines.push(row);
+  }
+
+  const satsToExport = filterSatellites(sats);
+  for (const s of satsToExport) {
+    if (!isValidCoord(s.lat, s.lon)) continue;
+    const row = [
+      now, 'satellite', zone,
+      s.norad, `"${(s.name || '').replace(/"/g, '""')}"`,
+      s.lat.toFixed(6), s.lon.toFixed(6),
+      (s.alt * 3280.84).toFixed(0), s.alt.toFixed(2), '',
+      s.az.toFixed(1), s.el.toFixed(1), s.dist.toFixed(2),
+      'NON'
+    ].join(',');
+    lines.push(row);
+  }
+
+  return lines.join('\n');
+}
+
+function downloadCsv(planes, sats, suffix = '') {
+  const content = buildCsvContent(planes, sats);
+  const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  const zoneShort = state.zone.name.split(' ')[0].replace(/[^a-zA-Z0-9]/g, '');
+  const filename = `radar_${zoneShort}_${dateStr}${suffix}.csv`;
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  const total = planes.length + filterSatellites(sats).length;
+  console.log(`📥 CSV exporté : ${filename} (${total} lignes)`);
+}
+
+function startAutoCsv() {
+  if (autoCsvInterval) clearInterval(autoCsvInterval);
+  autoCsvInterval = setInterval(() => {
+    if (!state.isVisible) return;
+    if (state.planes.length === 0 && state.satellites.length === 0) return;
+    csvExportCount++;
+    downloadCsv(state.planes, state.satellites, `_auto${csvExportCount}`);
+  }, 5 * 60 * 1000);
+  console.log('🔄 Export CSV automatique activé (toutes les 5 min)');
+}
+
+function stopAutoCsv() {
+  if (autoCsvInterval) {
+    clearInterval(autoCsvInterval);
+    autoCsvInterval = null;
+  }
+  console.log('⏹️ Export CSV automatique désactivé');
+}
+
+// ============================================================
+// FIN EXPORT CSV
+// ============================================================
 
 document.addEventListener('visibilitychange', () => {
   state.isVisible = !document.hidden;
@@ -821,30 +929,23 @@ function satColor(s) {
   return "#3fb950";
 }
 
-// ============================================================
-// CONVERSION OMM → TLE
-// ============================================================
 function ommToTle(sat) {
   try {
     const norad = String(sat.NORAD_CAT_ID).padStart(5, '0');
     const classification = sat.CLASSIFICATION_TYPE || 'U';
     const intlDesig = (sat.OBJECT_ID || '').replace(/[^A-Z0-9]/g, '').padEnd(8, ' ').slice(0, 8);
-
     const epochDate = new Date(sat.EPOCH + 'Z');
     if (isNaN(epochDate.getTime())) return null;
-
     const year = epochDate.getUTCFullYear() % 100;
     const yearStr = String(year).padStart(2, '0');
     const startOfYear = new Date(Date.UTC(epochDate.getUTCFullYear(), 0, 1));
     const dayOfYear = (epochDate - startOfYear) / 86400000 + 1;
     const dayStr = dayOfYear.toFixed(8).padStart(12, '0');
     const epoch = yearStr + dayStr;
-
     const mmDotRaw = sat.MEAN_MOTION_DOT || 0;
     const mmDotSign = mmDotRaw >= 0 ? '+' : '-';
     const mmDotAbs = Math.abs(mmDotRaw).toFixed(8).slice(2);
     const mmDot = `${mmDotSign}.${mmDotAbs}`;
-
     const bstarRaw = sat.BSTAR || 0;
     let bstar = ' 00000-0';
     if (bstarRaw !== 0) {
@@ -856,9 +957,7 @@ function ommToTle(sat) {
       const expStr = String(Math.abs(exp)).padStart(1, '0');
       bstar = `${sign}${mantStr}${expSign}${expStr}`;
     }
-
     const line1 = `1 ${norad}${classification} ${intlDesig} ${epoch} ${mmDot} ${bstar} 0  999`;
-
     const inc = sat.INCLINATION.toFixed(4).padStart(8, ' ');
     const raan = sat.RA_OF_ASC_NODE.toFixed(4).padStart(8, ' ');
     const ecc = String(sat.ECCENTRICITY).replace('0.', '').padStart(7, '0').slice(0, 7);
@@ -866,9 +965,7 @@ function ommToTle(sat) {
     const ma = sat.MEAN_ANOMALY.toFixed(4).padStart(8, ' ');
     const mm = sat.MEAN_MOTION.toFixed(8).padStart(11, ' ');
     const rev = String(sat.REV_AT_EPOCH || 0).padStart(5, ' ');
-
     const line2 = `2 ${norad} ${inc} ${raan} ${ecc} ${argp} ${ma} ${mm}${rev}`;
-
     return {
       line1: line1.padEnd(69, ' ').slice(0, 69),
       line2: line2.padEnd(69, ' ').slice(0, 69)
@@ -878,13 +975,9 @@ function ommToTle(sat) {
   }
 }
 
-// ============================================================
-// FETCH AVIONS via Deno Deploy
-// ============================================================
 async function fetchPlanes() {
   const { lat, lon } = state.zone;
   const radius = CONFIG.radiusNm;
-
   const targetUrl = `https://opendata.adsb.fi/api/v3/lat/${lat}/lon/${lon}/dist/${radius}`;
   const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
 
@@ -928,20 +1021,13 @@ async function fetchPlanes() {
   }
 }
 
-// ============================================================
-// CATALOGUE SATELLITES — MULTI-SOURCES + MULTI-FORMAT
-// ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
 
-  // ✅ Liste de sources à essayer (dans l'ordre)
   const sources = [
     'data/all_active.json',
     'https://raw.githubusercontent.com/gunout/houtis-facom/main/data/all_active.json',
     'https://cdn.jsdelivr.net/gh/gunout/houtis-facom@main/data/all_active.json',
-    // 👇 AJOUTEZ VOTRE URL ICI si le fichier est ailleurs
-    // 'https://raw.githubusercontent.com/gunout/AUTRE-REPO/main/CHEMIN.json',
-    // 'https://cdn.jsdelivr.net/gh/gunout/AUTRE-REPO@main/CHEMIN.json',
   ];
 
   let catalog = null;
@@ -962,16 +1048,14 @@ async function loadSatelliteCatalog() {
 
       const data = await res.json();
 
-      // ✅ CORRECTIF : accepter tableau direct OU objet {satellites: [...]}
       let extracted = null;
       if (Array.isArray(data)) {
         extracted = data;
       } else if (data && Array.isArray(data.satellites)) {
         extracted = data.satellites;
-        console.log(`  📦 Format détecté : objet {satellites: [...]}`);
+        console.log(`  📦 Format : {satellites: [...]}`);
       } else if (data && Array.isArray(data.ac)) {
         extracted = data.ac;
-        console.log(`  📦 Format détecté : objet {ac: [...]}`);
       }
 
       if (extracted && extracted.length > 0) {
@@ -979,8 +1063,6 @@ async function loadSatelliteCatalog() {
         sourceUsed = url;
         console.log(`  ✅ Chargé (${extracted.length} entrées)`);
         break;
-      } else {
-        console.warn(`  ❌ Format non reconnu`);
       }
     } catch (e) {
       console.warn(`  ❌ ${e.message}`);
@@ -994,29 +1076,18 @@ async function loadSatelliteCatalog() {
 
   console.log(`📦 ${catalog.length} entrées (source: ${sourceUsed})`);
 
-  // DEBUG : afficher les clés du 1er satellite
-  const first = catalog[0];
-  console.log('🔍 Clés du 1er satellite :', Object.keys(first).join(', '));
-  console.log('🔍 Premier objet :', JSON.stringify(first).slice(0, 500));
-
   const satrecs = [];
   let noTle = 0, badTle = 0, sgp4Error = 0, converted = 0;
 
   for (const sat of catalog) {
     try {
       let l1, l2;
-
-      // ✅ Accepter plusieurs formats de clés
       if (sat.TLE_LINE1 && sat.TLE_LINE2) {
         l1 = sat.TLE_LINE1; l2 = sat.TLE_LINE2;
-      } else if (sat.tle_line1 && sat.tle_line2) {
-        l1 = sat.tle_line1; l2 = sat.tle_line2;
-      } else if (sat.line1 && sat.line2) {
-        l1 = sat.line1; l2 = sat.line2;
-      } else if (sat.TLE1 && sat.TLE2) {
-        l1 = sat.TLE1; l2 = sat.TLE2;
       } else if (sat.tle1 && sat.tle2) {
         l1 = sat.tle1; l2 = sat.tle2;
+      } else if (sat.line1 && sat.line2) {
+        l1 = sat.line1; l2 = sat.line2;
       } else if (sat.MEAN_MOTION && sat.INCLINATION && sat.EPOCH) {
         const tle = ommToTle(sat);
         if (!tle) { noTle++; continue; }
@@ -1024,17 +1095,15 @@ async function loadSatelliteCatalog() {
       } else {
         noTle++; continue;
       }
-
       const l1s = String(l1).trim();
       const l2s = String(l2).trim();
       if (l1s.length < 50 || l2s.length < 50) { badTle++; continue; }
-
       const satrec = satellite.twoline2satrec(l1s, l2s);
       if (satrec && satrec.error === 0) {
         satrecs.push({
           satrec,
-          name: sat.OBJECT_NAME || sat.name || sat.NAME || 'INCONNU',
-          norad: sat.NORAD_CAT_ID || sat.norad || sat.NORAD || '?'
+          name: sat.OBJECT_NAME || sat.name || 'INCONNU',
+          norad: sat.NORAD_CAT_ID || sat.norad || '?'
         });
       } else {
         sgp4Error++;
@@ -1303,6 +1372,25 @@ document.getElementById("btn-toggle-sats").addEventListener("click", (e) => {
   state.showSatellites = !state.showSatellites;
   e.target.classList.toggle("active", state.showSatellites);
   renderMarkers(state.planes, state.satellites);
+});
+
+document.getElementById("btn-export-csv").addEventListener("click", () => {
+  if (state.planes.length === 0 && state.satellites.length === 0) {
+    alert('Aucune donnée à exporter. Attendez le prochain refresh.');
+    return;
+  }
+  downloadCsv(state.planes, state.satellites);
+});
+
+document.getElementById("btn-toggle-auto-csv").addEventListener("click", (e) => {
+  const active = e.target.classList.toggle("active");
+  if (active) {
+    startAutoCsv();
+    e.target.textContent = '🔄 AUTO CSV ACTIVÉ';
+  } else {
+    stopAutoCsv();
+    e.target.textContent = '🔄 AUTO CSV ON/OFF';
+  }
 });
 
 document.getElementById("copyrightYear").textContent = new Date().getFullYear();
