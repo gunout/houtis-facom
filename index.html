@@ -310,7 +310,7 @@ button.active { background: #E1000F; color: #fff; border-color: #E1000F; }
       <em>Liberté</em>
       <em>Égalité</em>
       <em>Fraternité</em>
-      <div class="ref-legale">Monitor Orbital v2.3 · NORAD 25544 · TLE + ADS-B + SGP4</div>
+      <div class="ref-legale">Monitor Orbital v2.4 · NORAD 25544 · TLE + ADS-B + SGP4</div>
     </div>
   </div>
 </div>
@@ -425,7 +425,7 @@ button.active { background: #E1000F; color: #fff; border-color: #E1000F; }
   <div>République Française — Ministère de l'Enseignement supérieur et de la Recherche</div>
   <div class="mention-legale">
     Cellule orbitale — Suivi ISS temps réel via TLE public<br>
-    Projection équirectangulaire · Natural Earth 110m · satellite.js · NORAD 25544 · adsb.lol · SGP4 · Refresh 15s
+    Projection équirectangulaire · Natural Earth 110m · satellite.js · NORAD 25544 · adsb.lol · SGP4 · Refresh 30s
   </div>
   <div class="copyright-footer">
     © <span id="copyrightYear">2025</span> · <span class="sig">CELLULE ORBITALE</span> · gunout · Tous droits réservés
@@ -443,11 +443,11 @@ const ROWS = 50;
 const ISS_NORAD = 25544;
 const TRACK_MAX = 30;
 
-// 🔧 WORKER CLOUDFLARE
+// Worker Cloudflare
 const CORS_PROXY = 'https://facom-proxy.gunout.workers.dev';
 
-// Fréquences de refresh
-const ADSB_REFRESH_MS = 15000;   // 15 secondes
+// Fréquences de refresh (ajustées pour éviter 429)
+const ADSB_REFRESH_MS = 30000;   // 30 secondes
 const SATS_REFRESH_MS = 10000;   // 10 secondes
 
 const FALLBACK_TLE = {
@@ -497,6 +497,8 @@ const state = {
   lastSatsCompute: 0,
   adsbSource: '—',
   adsbError: null,
+  cacheHits: 0,
+  cacheMiss: 0,
 };
 
 /* ============================================================
@@ -526,27 +528,53 @@ function toDMS(value, posLabel, negLabel) {
 }
 
 /* ============================================================
- *  PROXY WORKER (fonction unique pour toutes les APIs)
+ *  PROXY WORKER AVEC RETRY + BACKOFF (gestion 429)
  * ============================================================ */
-async function fetchViaWorker(targetUrl, timeoutMs = 15000) {
+async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
   const proxyUrl = `${CORS_PROXY}?url=${encodeURIComponent(targetUrl)}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
-    const res = await fetch(proxyUrl, { signal: controller.signal });
-    clearTimeout(timeout);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    try { return JSON.parse(text); } catch { return text; }
-  } catch (e) {
-    clearTimeout(timeout);
-    throw new Error(`Worker: ${e.message}`);
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(proxyUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      // Détection du cache
+      const cacheStatus = res.headers.get('X-Cache');
+      if (cacheStatus === 'HIT') state.cacheHits++;
+      else if (cacheStatus === 'MISS') state.cacheMiss++;
+
+      // 429 : trop de requêtes → backoff exponentiel
+      if (res.status === 429) {
+        const wait = Math.pow(2, attempt) * 3000;  // 3s, 6s, 12s
+        console.warn(`⏳ 429 reçu (tentative ${attempt + 1}/${maxRetries}), retry dans ${wait/1000}s…`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const text = await res.text();
+      try { return JSON.parse(text); } catch { return text; }
+    } catch (e) {
+      clearTimeout(timeout);
+      if (attempt === maxRetries - 1) {
+        throw new Error(`Worker (après ${maxRetries} tentatives): ${e.message}`);
+      }
+      // Backoff pour les autres erreurs aussi
+      const wait = Math.pow(2, attempt) * 2000;
+      console.warn(`⚠️ Erreur (${e.message}), retry dans ${wait/1000}s…`);
+      await new Promise(r => setTimeout(r, wait));
+    }
   }
+
+  throw new Error('Worker: retries épuisés');
 }
 
 /* ============================================================
- *  GEOJSON NATURAL EARTH (via Worker)
+ *  GEOJSON NATURAL EARTH
  * ============================================================ */
 async function loadLand() {
   const url = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson';
@@ -632,17 +660,14 @@ function project(lon, lat) {
 function renderGrid(grid, issPos = null) {
   const g = grid.map(row => row.map(c => ({ ...c })));
 
-  // Marqueurs fixes
   for (const m of MARKERS) {
     const p = project(m.lon, m.lat);
     if (p) { g[p.i][p.j].char = m.char; g[p.i][p.j].cls = m.cls; }
   }
 
-  // Zone d'observation
   const obsP = project(state.zone.lon, state.zone.lat);
   if (obsP) { g[obsP.i][obsP.j].char = '◎'; g[obsP.i][obsP.j].cls = 'obs'; }
 
-  // Trace ISS
   for (const t of state.issTrack) {
     const p = project(t.lon, t.lat);
     if (p && (g[p.i][p.j].char === ' ' || g[p.i][p.j].char === '·' || g[p.i][p.j].char === '•')) {
@@ -651,7 +676,6 @@ function renderGrid(grid, issPos = null) {
     }
   }
 
-  // Satellites
   if (state.satsVisible) {
     for (const s of state.satellites) {
       const p = project(s.lon, s.lat);
@@ -668,7 +692,6 @@ function renderGrid(grid, issPos = null) {
     }
   }
 
-  // Avions
   if (state.planesVisible) {
     const planesToShow = state.militaryOnly
       ? state.planes.filter(p => p.military)
@@ -684,13 +707,11 @@ function renderGrid(grid, issPos = null) {
     }
   }
 
-  // ISS (priorité maximale)
   if (issPos) {
     const p = project(issPos.lon, issPos.lat);
     if (p) { g[p.i][p.j].char = '◉'; g[p.i][p.j].cls = 'iss'; }
   }
 
-  // Rendu HTML
   const out = document.getElementById('output');
   let html = '';
   html += `<div class="line logo">   ███████ ███████  █████</div>`;
@@ -864,7 +885,7 @@ function computeISSPosition() {
 }
 
 /* ============================================================
- *  AVIONS ADS-B (via Worker)
+ *  AVIONS ADS-B (via Worker + retry)
  * ============================================================ */
 function isMilitary(icao24, callsign) {
   const cs = (callsign || "").toUpperCase();
@@ -905,14 +926,14 @@ async function fetchPlanes() {
 
   try {
     console.log(`📡 ADS-B via Worker…`);
-    const data = await fetchViaWorker(targetUrl, 15000);
+    const data = await fetchViaWorker(targetUrl, 15000, 3);
 
     if (!data || !Array.isArray(data.ac)) {
       throw new Error('Format invalide');
     }
 
     const aircraft = data.ac;
-    console.log(`✅ ADS-B: ${aircraft.length} avions`);
+    console.log(`✅ ADS-B: ${aircraft.length} avions (cache: ${state.cacheHits}H/${state.cacheMiss}M)`);
     state.adsbSource = 'adsb.lol (Worker)';
     state.adsbError = null;
 
@@ -965,7 +986,7 @@ async function loadSatelliteCatalog() {
 
   try {
     console.log('📡 Chargement catalogue CelesTrak via Worker…');
-    const catalog = await fetchViaWorker(celestrakUrl, 30000);
+    const catalog = await fetchViaWorker(celestrakUrl, 30000, 2);
 
     if (!Array.isArray(catalog)) {
       console.error("Catalogue non-tableau :", typeof catalog);
@@ -1086,14 +1107,12 @@ function loop(ts) {
   if (!state.paused && state.baseGrid && ts - lastUpdate > 1000) {
     lastUpdate = ts;
 
-    // ISS à chaque seconde
     const pos = computeISSPosition();
     if (pos) {
       state.issTrack.push({ lon: pos.lon, lat: pos.lat });
       if (state.issTrack.length > TRACK_MAX) state.issTrack.shift();
     }
 
-    // Recalcul satellites toutes les 10s
     if (state.catalogLoaded && ts - state.lastSatsCompute > SATS_REFRESH_MS) {
       state.lastSatsCompute = ts;
       const sats = computeSatellites();
@@ -1101,7 +1120,6 @@ function loop(ts) {
       renderTelemesuresSats(state.satellites);
     }
 
-    // Refresh ADS-B toutes les 15s
     if (ts - lastAdsBRefresh > ADSB_REFRESH_MS) {
       lastAdsBRefresh = ts;
       refreshAdsB().catch(e => console.warn('ADS-B refresh échoué:', e));
