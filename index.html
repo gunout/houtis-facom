@@ -569,7 +569,7 @@ body {
       <em>Liberté</em>
       <em>Égalité</em>
       <em>Fraternité</em>
-      <div class="ref-legale">Système TACTICAL-ORBIT · v3.4 · NORAD 25544</div>
+      <div class="ref-legale">Système TACTICAL-ORBIT · v3.5 · NORAD 25544</div>
     </div>
   </div>
 </div>
@@ -698,7 +698,7 @@ body {
   <div>République Française — Ministère des Armées</div>
   <div class="mention-legale">
     Cellule de veille stratégique · Surveillance aérienne ADS-B et orbitale SGP4<br>
-    Sources : adsb.lol · CelesTrak OMM · OpenStreetMap<br>
+    Sources : adsb.fi · CelesTrak OMM · OpenStreetMap<br>
     Traitement : Cloudflare Worker · satellite.js · Leaflet
   </div>
   <div class="copyright-footer">
@@ -710,7 +710,7 @@ body {
 'use strict';
 
 const CONFIG = {
-  refreshInterval: 120,   // ✅ 120s au lieu de 60 pour éviter le 429 Cloudflare
+  refreshInterval: 120,
   radiusNm: 250,
   minElevation: 5,
   maxListItems: 30,
@@ -742,20 +742,12 @@ const state = {
   observerMarker: null,
   catalogLoaded: false,
   currentSource: '—',
-  lastAdsBRefresh: 0,
   isVisible: true
 };
 
-// ============================================================
-// PAUSE AUTOMATIQUE QUAND L'ONGLET EST CACHÉ
-// ============================================================
 document.addEventListener('visibilitychange', () => {
   state.isVisible = !document.hidden;
-  if (!state.isVisible) {
-    console.log('⏸️ Onglet caché — pause des refreshs pour économiser le quota Worker');
-  } else {
-    console.log('▶️ Onglet visible — reprise des refreshs');
-  }
+  console.log(state.isVisible ? '▶️ Onglet visible' : '⏸️ Onglet caché — pause');
 });
 
 const map = L.map('map', {
@@ -822,30 +814,23 @@ function satColor(s) {
   return "#3fb950";
 }
 
-// ============================================================
-// CONVERSION OMM → TLE
-// ============================================================
 function ommToTle(sat) {
   try {
     const norad = String(sat.NORAD_CAT_ID).padStart(5, '0');
     const classification = sat.CLASSIFICATION_TYPE || 'U';
     const intlDesig = (sat.OBJECT_ID || '').replace(/[^A-Z0-9]/g, '').padEnd(8, ' ').slice(0, 8);
-
     const epochDate = new Date(sat.EPOCH + 'Z');
     if (isNaN(epochDate.getTime())) return null;
-
     const year = epochDate.getUTCFullYear() % 100;
     const yearStr = String(year).padStart(2, '0');
     const startOfYear = new Date(Date.UTC(epochDate.getUTCFullYear(), 0, 1));
     const dayOfYear = (epochDate - startOfYear) / 86400000 + 1;
     const dayStr = dayOfYear.toFixed(8).padStart(12, '0');
     const epoch = yearStr + dayStr;
-
     const mmDotRaw = sat.MEAN_MOTION_DOT || 0;
     const mmDotSign = mmDotRaw >= 0 ? '+' : '-';
     const mmDotAbs = Math.abs(mmDotRaw).toFixed(8).slice(2);
     const mmDot = `${mmDotSign}.${mmDotAbs}`;
-
     const bstarRaw = sat.BSTAR || 0;
     let bstar = ' 00000-0';
     if (bstarRaw !== 0) {
@@ -857,9 +842,7 @@ function ommToTle(sat) {
       const expStr = String(Math.abs(exp)).padStart(1, '0');
       bstar = `${sign}${mantStr}${expSign}${expStr}`;
     }
-
     const line1 = `1 ${norad}${classification} ${intlDesig} ${epoch} ${mmDot} ${bstar} 0  999`;
-
     const inc = sat.INCLINATION.toFixed(4).padStart(8, ' ');
     const raan = sat.RA_OF_ASC_NODE.toFixed(4).padStart(8, ' ');
     const ecc = String(sat.ECCENTRICITY).replace('0.', '').padStart(7, '0').slice(0, 7);
@@ -867,9 +850,7 @@ function ommToTle(sat) {
     const ma = sat.MEAN_ANOMALY.toFixed(4).padStart(8, ' ');
     const mm = sat.MEAN_MOTION.toFixed(8).padStart(11, ' ');
     const rev = String(sat.REV_AT_EPOCH || 0).padStart(5, ' ');
-
     const line2 = `2 ${norad} ${inc} ${raan} ${ecc} ${argp} ${ma} ${mm}${rev}`;
-
     return {
       line1: line1.padEnd(69, ' ').slice(0, 69),
       line2: line2.padEnd(69, ' ').slice(0, 69)
@@ -879,29 +860,20 @@ function ommToTle(sat) {
   }
 }
 
-// ============================================================
-// FETCH WORKER — 1 seule tentative (évite de saturer)
-// ============================================================
 async function fetchViaWorker(targetUrl, timeoutMs = 20000) {
   const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
     const res = await fetch(proxyUrl, { signal: controller.signal });
     clearTimeout(timeout);
-
     const source = res.headers.get('X-Source');
     if (source) state.currentSource = source;
-
-    // ✅ Ne pas retenter sur 429 — attendre le prochain cycle
     if (res.status === 429) {
-      console.warn('⏳ 429 reçu — attente du prochain cycle (pas de retry immédiat)');
+      console.warn('⏳ 429 — attente prochain cycle');
       throw new Error('429 Too Many Requests');
     }
-
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
     const text = await res.text();
     try { return JSON.parse(text); } catch { return text; }
   } catch (e) {
@@ -911,22 +883,24 @@ async function fetchViaWorker(targetUrl, timeoutMs = 20000) {
 }
 
 // ============================================================
-// FETCH AVIONS
+// FETCH AVIONS — ✅ adsb.fi (fiable, 78 avions vérifiés)
 // ============================================================
 async function fetchPlanes() {
   const { lat, lon } = state.zone;
   const radius = CONFIG.radiusNm;
-  const targetUrl = `https://api.adsb.lol/v2/point/${lat}/${lon}/${radius}`;
+
+  // ✅ adsb.fi au lieu d'adsb.lol
+  const targetUrl = `https://opendata.adsb.fi/api/v3/lat/${lat}/lon/${lon}/dist/${radius}`;
 
   try {
-    console.log(`📡 ADS-B via Worker…`);
+    console.log(`📡 ADS-B via adsb.fi…`);
     const data = await fetchViaWorker(targetUrl);
     const ac = data.ac || [];
     if (!Array.isArray(ac)) throw new Error('Format invalide');
 
-    console.log(`✅ ADS-B: ${ac.length} avions (source: ${state.currentSource})`);
+    console.log(`✅ ADS-B: ${ac.length} avions`);
     const srcEl = document.getElementById('source-name');
-    if (srcEl) srcEl.textContent = state.currentSource;
+    if (srcEl) srcEl.textContent = 'adsb.fi';
 
     const planes = [];
     for (const a of ac) {
@@ -954,15 +928,10 @@ async function fetchPlanes() {
   }
 }
 
-// ============================================================
-// CATALOGUE SATELLITES — chargé UNE SEULE FOIS
-// ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
-
   let catalog = null;
   let source = '—';
-
   try {
     console.log('📡 Chargement catalogue local…');
     const res = await fetch('data/all_active.json');
@@ -974,59 +943,36 @@ async function loadSatelliteCatalog() {
   } catch (e) {
     console.warn('Catalogue local indisponible');
   }
-
   if (!Array.isArray(catalog) || catalog.length === 0) {
     console.error("Catalogue invalide ou vide");
     return;
   }
-
   console.log(`📦 ${catalog.length} entrées (source: ${source})`);
-
   const first = catalog[0];
   const hasTleLines = !!(first.TLE_LINE1 && first.TLE_LINE2);
   const isOmm = !!(first.MEAN_MOTION && first.INCLINATION && first.EPOCH);
-
-  console.log(`🔍 Format détecté : ${hasTleLines ? 'TLE brut' : isOmm ? 'OMM' : 'INCONNU'}`);
-
+  console.log(`🔍 Format : ${hasTleLines ? 'TLE brut' : isOmm ? 'OMM' : 'INCONNU'}`);
   const satrecs = [];
   let noTle = 0, badTle = 0, sgp4Error = 0, converted = 0;
-
   for (const sat of catalog) {
     try {
       let l1, l2;
-
       if (sat.TLE_LINE1 && sat.TLE_LINE2) {
-        l1 = sat.TLE_LINE1;
-        l2 = sat.TLE_LINE2;
+        l1 = sat.TLE_LINE1; l2 = sat.TLE_LINE2;
       } else if (sat.MEAN_MOTION && sat.INCLINATION && sat.EPOCH) {
         const tle = ommToTle(sat);
         if (!tle) { noTle++; continue; }
-        l1 = tle.line1;
-        l2 = tle.line2;
-        converted++;
-      } else {
-        noTle++;
-        continue;
-      }
-
+        l1 = tle.line1; l2 = tle.line2; converted++;
+      } else { noTle++; continue; }
       const l1s = String(l1).trim();
       const l2s = String(l2).trim();
-
       if (l1s.length < 60 || l2s.length < 60) { badTle++; continue; }
-
       const satrec = satellite.twoline2satrec(l1s, l2s);
       if (satrec && satrec.error === 0) {
-        satrecs.push({
-          satrec,
-          name: sat.OBJECT_NAME || 'INCONNU',
-          norad: sat.NORAD_CAT_ID || '?'
-        });
-      } else {
-        sgp4Error++;
-      }
+        satrecs.push({ satrec, name: sat.OBJECT_NAME || 'INCONNU', norad: sat.NORAD_CAT_ID || '?' });
+      } else { sgp4Error++; }
     } catch (e) { sgp4Error++; }
   }
-
   state.satrecs = satrecs;
   state.catalogLoaded = true;
   console.log(`✅ ${satrecs.length} satellites SGP4 chargés`);
@@ -1083,27 +1029,15 @@ function clearMarkers() {
 
 function renderMarkers(planes, sats) {
   clearMarkers();
-
   if (state.observerMarker) map.removeLayer(state.observerMarker);
   state.observerMarker = L.marker([state.zone.lat, state.zone.lon], {
-    icon: L.divIcon({
-      className: 'observer-marker',
-      html: '<div class="observer-dot"></div>',
-      iconSize: [14, 14],
-      iconAnchor: [7, 7]
-    })
+    icon: L.divIcon({ className: 'observer-marker', html: '<div class="observer-dot"></div>', iconSize: [14, 14], iconAnchor: [7, 7] })
   }).addTo(map).bindPopup(`<b>${state.zone.name}</b><br>Station de surveillance · République Française`);
-
   if (coverageCircle) map.removeLayer(coverageCircle);
   coverageCircle = L.circle([state.zone.lat, state.zone.lon], {
     radius: CONFIG.radiusNm * 1852,
-    color: '#000091',
-    fillColor: '#000091',
-    fillOpacity: 0.04,
-    weight: 1.5,
-    dashArray: '6,6'
+    color: '#000091', fillColor: '#000091', fillOpacity: 0.04, weight: 1.5, dashArray: '6,6'
   }).addTo(map);
-
   const planesToShow = state.militaryOnly ? planes.filter(p => p.military) : planes;
   for (const p of planesToShow) {
     const color = planeColor(p);
@@ -1111,11 +1045,9 @@ function renderMarkers(planes, sats) {
       icon: L.divIcon({
         className: 'plane-marker',
         html: `<div class="plane-dot ${p.military ? 'mil' : ''}" style="background:${color};color:${color}"></div>`,
-        iconSize: [10, 10],
-        iconAnchor: [5, 5]
+        iconSize: [10, 10], iconAnchor: [5, 5]
       })
     }).addTo(map);
-
     marker.bindPopup(`
       <b>${p.callsign}${p.military ? ' 🎖️' : ''}</b>
       ICAO24 : ${p.icao24}<br>
@@ -1126,10 +1058,8 @@ function renderMarkers(planes, sats) {
       Azimut : ${p.az.toFixed(1)}°<br>
       Élévation : ${p.el.toFixed(1)}°
     `);
-
     state.planeMarkers.push(marker);
   }
-
   if (state.showSatellites) {
     const filteredSats = filterSatellites(sats);
     for (const s of filteredSats) {
@@ -1138,11 +1068,9 @@ function renderMarkers(planes, sats) {
         icon: L.divIcon({
           className: 'sat-marker',
           html: `<div class="sat-dot" style="background:${color};color:${color}"></div>`,
-          iconSize: [10, 10],
-          iconAnchor: [5, 5]
+          iconSize: [10, 10], iconAnchor: [5, 5]
         })
       }).addTo(map);
-
       marker.bindPopup(`
         <b>${s.name}</b>
         NORAD : ${s.norad}<br>
@@ -1151,7 +1079,6 @@ function renderMarkers(planes, sats) {
         Azimut : ${s.az.toFixed(1)}°<br>
         Élévation : ${s.el.toFixed(1)}°
       `);
-
       state.satMarkers.push(marker);
     }
   }
@@ -1161,10 +1088,7 @@ function renderPlanesList(planes) {
   const el = document.getElementById("planes-list");
   const filtered = state.militaryOnly ? planes.filter(p => p.military) : planes;
   const items = filtered.slice(0, CONFIG.maxListItems);
-  if (items.length === 0) {
-    el.innerHTML = '<div class="loading">Aucun contact aérien dans la zone</div>';
-    return;
-  }
+  if (items.length === 0) { el.innerHTML = '<div class="loading">Aucun contact aérien dans la zone</div>'; return; }
   el.innerHTML = items.map(p => `
     <div class="list-item" data-lat="${p.lat}" data-lon="${p.lon}">
       <span class="cs ${p.military ? 'mil' : ''}">${p.callsign}</span>
@@ -1173,7 +1097,6 @@ function renderPlanesList(planes) {
       <span class="num highlight">${p.dist.toFixed(0)} km</span>
     </div>
   `).join("");
-
   el.querySelectorAll(".list-item").forEach(item => {
     item.addEventListener("click", () => {
       map.setView([parseFloat(item.dataset.lat), parseFloat(item.dataset.lon)], 10);
@@ -1185,10 +1108,7 @@ function renderSatsList(sats) {
   const el = document.getElementById("sats-list");
   const filtered = filterSatellites(sats);
   const items = filtered.slice(0, CONFIG.maxListItems);
-  if (items.length === 0) {
-    el.innerHTML = '<div class="loading">Aucun satellite visible</div>';
-    return;
-  }
+  if (items.length === 0) { el.innerHTML = '<div class="loading">Aucun satellite visible</div>'; return; }
   el.innerHTML = items.map(s => `
     <div class="list-item" data-lat="${s.lat}" data-lon="${s.lon}">
       <span class="cs">${s.name}</span>
@@ -1197,7 +1117,6 @@ function renderSatsList(sats) {
       <span class="num highlight">${s.dist.toFixed(0)} km</span>
     </div>
   `).join("");
-
   el.querySelectorAll(".list-item").forEach(item => {
     item.addEventListener("click", () => {
       map.setView([parseFloat(item.dataset.lat), parseFloat(item.dataset.lon)], 5);
@@ -1206,18 +1125,12 @@ function renderSatsList(sats) {
 }
 
 async function refresh() {
-  // ✅ Ne rien faire si l'onglet est caché
-  if (!state.isVisible) {
-    console.log('⏸️ Refresh annulé (onglet caché)');
-    return;
-  }
-
+  if (!state.isVisible) { console.log('⏸️ Refresh annulé (onglet caché)'); return; }
   const utc = formatUTC();
   document.getElementById("stat-utc").textContent = utc;
   document.getElementById("ov-utc").textContent = utc;
   document.getElementById("stat-zone").textContent = state.zone.name.split(" ")[0];
   document.getElementById("ov-zone").textContent = state.zone.name.split(" ")[0];
-
   const planes = await fetchPlanes();
   state.planes = planes;
   const milCount = planes.filter(p => p.military).length;
@@ -1226,14 +1139,12 @@ async function refresh() {
   document.getElementById("planes-count").textContent = planes.length;
   document.getElementById("ov-planes").textContent = planes.length;
   document.getElementById("ov-mil").textContent = milCount;
-
   await loadSatelliteCatalog();
   const sats = computeSatellites();
   state.satellites = sats;
   document.getElementById("stat-sats").textContent = sats.length;
   document.getElementById("sats-count").textContent = sats.length;
   document.getElementById("ov-sats").textContent = sats.length;
-
   renderMarkers(planes, sats);
   renderPlanesList(planes);
   renderSatsList(sats);
