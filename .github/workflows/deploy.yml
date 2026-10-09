@@ -24,6 +24,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download CelesTrak catalog
+        run: |
+          mkdir -p data
+          curl -sL "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json" -o data/all_active.json
+          ls -lh data/
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
