@@ -569,7 +569,7 @@ body {
       <em>Liberté</em>
       <em>Égalité</em>
       <em>Fraternité</em>
-      <div class="ref-legale">Système TACTICAL-ORBIT · v3.6 · NORAD 25544</div>
+      <div class="ref-legale">Système TACTICAL-ORBIT · v3.7 · NORAD 25544</div>
     </div>
   </div>
 </div>
@@ -698,8 +698,8 @@ body {
   <div>République Française — Ministère des Armées</div>
   <div class="mention-legale">
     Cellule de veille stratégique · Surveillance aérienne ADS-B et orbitale SGP4<br>
-    Sources : adsb.fi (direct) · CelesTrak OMM (local) · OpenStreetMap<br>
-    Traitement : satellite.js · Leaflet
+    Sources : adsb.fi (via Worker) · CelesTrak OMM (local) · OpenStreetMap<br>
+    Traitement : Cloudflare Worker · satellite.js · Leaflet
   </div>
   <div class="copyright-footer">
     © <span id="copyrightYear">2026</span> · <span class="sig">HOUTIS-FACOM</span> · gunout · Tous droits réservés
@@ -714,6 +714,7 @@ const CONFIG = {
   radiusNm: 250,
   minElevation: 5,
   maxListItems: 30,
+  workerUrl: 'https://facom-proxy.gunout.workers.dev',
   militaryPrefixes: [
     "RCH","REACH","DUKE","MAGIC","HAWK","VIPER","TITAN","SPAR","EVAC",
     "ASCOT","JAKE","HOMER","PYTHON","RRR","RFR","TARTAN","FAF","COTAM",
@@ -740,7 +741,7 @@ const state = {
   satMarkers: [],
   observerMarker: null,
   catalogLoaded: false,
-  currentSource: 'adsb.fi',
+  currentSource: '—',
   isVisible: true
 };
 
@@ -877,25 +878,27 @@ function ommToTle(sat) {
 }
 
 // ============================================================
-// FETCH AVIONS — ✅ DIRECT adsb.fi (sans Worker)
+// FETCH AVIONS — ✅ Via Worker (contourne CORS)
 // ============================================================
 async function fetchPlanes() {
   const { lat, lon } = state.zone;
   const radius = CONFIG.radiusNm;
-  const url = `https://opendata.adsb.fi/api/v3/lat/${lat}/lon/${lon}/dist/${radius}`;
+
+  const targetUrl = `https://opendata.adsb.fi/api/v3/lat/${lat}/lon/${lon}/dist/${radius}`;
+  const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
 
   try {
-    console.log(`📡 ADS-B via adsb.fi (direct)…`);
-    const res = await fetch(url);
+    console.log(`📡 ADS-B via Worker (adsb.fi)…`);
+    const res = await fetch(proxyUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const ac = data.ac || [];
     if (!Array.isArray(ac)) throw new Error('Format invalide');
 
     console.log(`✅ ADS-B: ${ac.length} avions`);
-    state.currentSource = 'adsb.fi';
+    state.currentSource = 'adsb.fi (Worker)';
     const srcEl = document.getElementById('source-name');
-    if (srcEl) srcEl.textContent = 'adsb.fi';
+    if (srcEl) srcEl.textContent = 'adsb.fi (Worker)';
 
     const planes = [];
     for (const a of ac) {
@@ -925,7 +928,7 @@ async function fetchPlanes() {
 }
 
 // ============================================================
-// CATALOGUE SATELLITES — ✅ TLE ≥ 50 chars
+// CATALOGUE SATELLITES — local
 // ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
@@ -972,8 +975,6 @@ async function loadSatelliteCatalog() {
 
       const l1s = String(l1).trim();
       const l2s = String(l2).trim();
-
-      // ✅ CORRECTIF : accepter TLE ≥ 50 chars (au lieu de 60)
       if (l1s.length < 50 || l2s.length < 50) { badTle++; continue; }
 
       const satrec = satellite.twoline2satrec(l1s, l2s);
@@ -1009,7 +1010,6 @@ function computeSatellites() {
       const lon = satellite.degreesLong(gd.longitude);
       const lat = satellite.degreesLat(gd.latitude);
       const alt = gd.height;
-      // ✅ Filtrer les coordonnées invalides
       if (!isValidCoord(lat, lon)) continue;
       if (!isFinite(alt)) continue;
       const { az, el, dist } = azEl(state.zone.lat, state.zone.lon, 0.015, lat, lon, alt);
@@ -1065,7 +1065,6 @@ function renderMarkers(planes, sats) {
     color: '#000091', fillColor: '#000091', fillOpacity: 0.04, weight: 1.5, dashArray: '6,6'
   }).addTo(map);
 
-  // Avions — ✅ Filtrer coordonnées invalides
   const planesToShow = state.militaryOnly ? planes.filter(p => p.military) : planes;
   for (const p of planesToShow) {
     if (!isValidCoord(p.lat, p.lon)) continue;
@@ -1095,7 +1094,6 @@ function renderMarkers(planes, sats) {
     } catch (e) { continue; }
   }
 
-  // Satellites — ✅ Filtrer coordonnées invalides
   if (state.showSatellites) {
     const filteredSats = filterSatellites(sats);
     for (const s of filteredSats) {
@@ -1129,7 +1127,6 @@ function renderMarkers(planes, sats) {
 function renderPlanesList(planes) {
   const el = document.getElementById("planes-list");
   const filtered = state.militaryOnly ? planes.filter(p => p.military) : planes;
-  // ✅ Filtrer coordonnées valides
   const valid = filtered.filter(p => isValidCoord(p.lat, p.lon));
   const items = valid.slice(0, CONFIG.maxListItems);
   if (items.length === 0) {
