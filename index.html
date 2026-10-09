@@ -569,7 +569,7 @@ body {
       <em>Liberté</em>
       <em>Égalité</em>
       <em>Fraternité</em>
-      <div class="ref-legale">Système TACTICAL-ORBIT · v3.7 · NORAD 25544</div>
+      <div class="ref-legale">Système TACTICAL-ORBIT · v4.0 · NORAD 25544</div>
     </div>
   </div>
 </div>
@@ -698,8 +698,8 @@ body {
   <div>République Française — Ministère des Armées</div>
   <div class="mention-legale">
     Cellule de veille stratégique · Surveillance aérienne ADS-B et orbitale SGP4<br>
-    Sources : adsb.fi (via Worker) · CelesTrak OMM (local) · OpenStreetMap<br>
-    Traitement : Cloudflare Worker · satellite.js · Leaflet
+    Sources : adsb.fi (via Deno Deploy) · CelesTrak · OpenStreetMap<br>
+    Traitement : Deno Deploy · satellite.js · Leaflet
   </div>
   <div class="copyright-footer">
     © <span id="copyrightYear">2026</span> · <span class="sig">HOUTIS-FACOM</span> · gunout · Tous droits réservés
@@ -714,6 +714,7 @@ const CONFIG = {
   radiusNm: 250,
   minElevation: 5,
   maxListItems: 30,
+  // ✅ PROXY DENO DEPLOY (remplace Cloudflare)
   workerUrl: 'https://facom.gunout.deno.net',
   militaryPrefixes: [
     "RCH","REACH","DUKE","MAGIC","HAWK","VIPER","TITAN","SPAR","EVAC",
@@ -878,7 +879,7 @@ function ommToTle(sat) {
 }
 
 // ============================================================
-// FETCH AVIONS — ✅ Via Worker (contourne CORS)
+// FETCH AVIONS via Deno Deploy
 // ============================================================
 async function fetchPlanes() {
   const { lat, lon } = state.zone;
@@ -888,7 +889,7 @@ async function fetchPlanes() {
   const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
 
   try {
-    console.log(`📡 ADS-B via Worker (adsb.fi)…`);
+    console.log(`📡 ADS-B via Deno Deploy…`);
     const res = await fetch(proxyUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -896,9 +897,9 @@ async function fetchPlanes() {
     if (!Array.isArray(ac)) throw new Error('Format invalide');
 
     console.log(`✅ ADS-B: ${ac.length} avions`);
-    state.currentSource = 'adsb.fi (Worker)';
+    state.currentSource = 'adsb.fi (Deno)';
     const srcEl = document.getElementById('source-name');
-    if (srcEl) srcEl.textContent = 'adsb.fi (Worker)';
+    if (srcEl) srcEl.textContent = 'adsb.fi (Deno)';
 
     const planes = [];
     for (const a of ac) {
@@ -928,34 +929,75 @@ async function fetchPlanes() {
 }
 
 // ============================================================
-// CATALOGUE SATELLITES — local
+// CATALOGUE SATELLITES — MULTI-SOURCES + MULTI-FORMAT
 // ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
 
+  // ✅ Liste de sources à essayer (dans l'ordre)
+  const sources = [
+    'data/all_active.json',
+    'https://raw.githubusercontent.com/gunout/houtis-facom/main/data/all_active.json',
+    'https://cdn.jsdelivr.net/gh/gunout/houtis-facom@main/data/all_active.json',
+    // 👇 AJOUTEZ VOTRE URL ICI si le fichier est ailleurs
+    // 'https://raw.githubusercontent.com/gunout/AUTRE-REPO/main/CHEMIN.json',
+    // 'https://cdn.jsdelivr.net/gh/gunout/AUTRE-REPO@main/CHEMIN.json',
+  ];
+
   let catalog = null;
-  try {
-    console.log('📡 Chargement catalogue local…');
-    const res = await fetch('data/all_active.json');
-    if (res.ok) {
-      catalog = await res.json();
-      console.log(`✅ Catalogue local chargé (${catalog.length} entrées)`);
+  let sourceUsed = '—';
+
+  for (const url of sources) {
+    try {
+      console.log(`📡 Tentative : ${url}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        console.warn(`  ❌ HTTP ${res.status}`);
+        continue;
+      }
+
+      const data = await res.json();
+
+      // ✅ CORRECTIF : accepter tableau direct OU objet {satellites: [...]}
+      let extracted = null;
+      if (Array.isArray(data)) {
+        extracted = data;
+      } else if (data && Array.isArray(data.satellites)) {
+        extracted = data.satellites;
+        console.log(`  📦 Format détecté : objet {satellites: [...]}`);
+      } else if (data && Array.isArray(data.ac)) {
+        extracted = data.ac;
+        console.log(`  📦 Format détecté : objet {ac: [...]}`);
+      }
+
+      if (extracted && extracted.length > 0) {
+        catalog = extracted;
+        sourceUsed = url;
+        console.log(`  ✅ Chargé (${extracted.length} entrées)`);
+        break;
+      } else {
+        console.warn(`  ❌ Format non reconnu`);
+      }
+    } catch (e) {
+      console.warn(`  ❌ ${e.message}`);
     }
-  } catch (e) {
-    console.warn('Catalogue local indisponible');
   }
 
-  if (!Array.isArray(catalog) || catalog.length === 0) {
-    console.error("Catalogue invalide ou vide");
+  if (!catalog) {
+    console.error("❌ Aucune source de catalogue disponible");
     return;
   }
 
-  console.log(`📦 ${catalog.length} entrées (source: local)`);
+  console.log(`📦 ${catalog.length} entrées (source: ${sourceUsed})`);
 
+  // DEBUG : afficher les clés du 1er satellite
   const first = catalog[0];
-  const hasTleLines = !!(first.TLE_LINE1 && first.TLE_LINE2);
-  const isOmm = !!(first.MEAN_MOTION && first.INCLINATION && first.EPOCH);
-  console.log(`🔍 Format : ${hasTleLines ? 'TLE brut' : isOmm ? 'OMM' : 'INCONNU'}`);
+  console.log('🔍 Clés du 1er satellite :', Object.keys(first).join(', '));
+  console.log('🔍 Premier objet :', JSON.stringify(first).slice(0, 500));
 
   const satrecs = [];
   let noTle = 0, badTle = 0, sgp4Error = 0, converted = 0;
@@ -963,8 +1005,18 @@ async function loadSatelliteCatalog() {
   for (const sat of catalog) {
     try {
       let l1, l2;
+
+      // ✅ Accepter plusieurs formats de clés
       if (sat.TLE_LINE1 && sat.TLE_LINE2) {
         l1 = sat.TLE_LINE1; l2 = sat.TLE_LINE2;
+      } else if (sat.tle_line1 && sat.tle_line2) {
+        l1 = sat.tle_line1; l2 = sat.tle_line2;
+      } else if (sat.line1 && sat.line2) {
+        l1 = sat.line1; l2 = sat.line2;
+      } else if (sat.TLE1 && sat.TLE2) {
+        l1 = sat.TLE1; l2 = sat.TLE2;
+      } else if (sat.tle1 && sat.tle2) {
+        l1 = sat.tle1; l2 = sat.tle2;
       } else if (sat.MEAN_MOTION && sat.INCLINATION && sat.EPOCH) {
         const tle = ommToTle(sat);
         if (!tle) { noTle++; continue; }
@@ -981,8 +1033,8 @@ async function loadSatelliteCatalog() {
       if (satrec && satrec.error === 0) {
         satrecs.push({
           satrec,
-          name: sat.OBJECT_NAME || 'INCONNU',
-          norad: sat.NORAD_CAT_ID || '?'
+          name: sat.OBJECT_NAME || sat.name || sat.NAME || 'INCONNU',
+          norad: sat.NORAD_CAT_ID || sat.norad || sat.NORAD || '?'
         });
       } else {
         sgp4Error++;
