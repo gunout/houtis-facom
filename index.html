@@ -310,7 +310,7 @@ button.active { background: #E1000F; color: #fff; border-color: #E1000F; }
       <em>Liberté</em>
       <em>Égalité</em>
       <em>Fraternité</em>
-      <div class="ref-legale">Monitor Orbital v2.2 · NORAD 25544 · TLE + ADS-B + SGP4</div>
+      <div class="ref-legale">Monitor Orbital v2.3 · NORAD 25544 · TLE + ADS-B + SGP4</div>
     </div>
   </div>
 </div>
@@ -338,8 +338,8 @@ button.active { background: #E1000F; color: #fff; border-color: #E1000F; }
                 <div class="valeur" id="adsb-source">—</div>
             </div>
             <div>
-                <div class="label">Grille</div>
-                <div class="valeur">120 × 50</div>
+                <div class="label">Catalogue SGP4</div>
+                <div class="valeur" id="catalog-status">—</div>
             </div>
             <div class="bloc-horloge">
                 <div class="label">Temps Universel Coordonné</div>
@@ -425,7 +425,7 @@ button.active { background: #E1000F; color: #fff; border-color: #E1000F; }
   <div>République Française — Ministère de l'Enseignement supérieur et de la Recherche</div>
   <div class="mention-legale">
     Cellule orbitale — Suivi ISS temps réel via TLE public<br>
-    Projection équirectangulaire · Natural Earth 110m · satellite.js · NORAD 25544 · adsb.fi · SGP4
+    Projection équirectangulaire · Natural Earth 110m · satellite.js · NORAD 25544 · adsb.lol · SGP4 · Refresh 15s
   </div>
   <div class="copyright-footer">
     © <span id="copyrightYear">2025</span> · <span class="sig">CELLULE ORBITALE</span> · gunout · Tous droits réservés
@@ -442,6 +442,13 @@ const COLS = 120;
 const ROWS = 50;
 const ISS_NORAD = 25544;
 const TRACK_MAX = 30;
+
+// 🔧 WORKER CLOUDFLARE
+const CORS_PROXY = 'https://facom-proxy.gunout.workers.dev';
+
+// Fréquences de refresh
+const ADSB_REFRESH_MS = 15000;   // 15 secondes
+const SATS_REFRESH_MS = 10000;   // 10 secondes
 
 const FALLBACK_TLE = {
   name: 'ISS (ZARYA)',
@@ -464,25 +471,6 @@ const MILITARY_PREFIXES = [
 ];
 const MILITARY_ICAO_PREFIXES = [
   "ae","43c","3f","38","44","48","4b","71","76","06","70","72","73","4d","45"
-];
-
-/* ============================================================
- *  SOURCES ADS-B (multi-sources avec fallback)
- *  adsb.fi → airplanes.live → adsb.one (tous CORS-friendly)
- * ============================================================ */
-const ADSB_SOURCES = [
-  {
-    name: 'adsb.fi',
-    url: (lat, lon, radius) => `https://opendata.adsb.fi/api/v3/lat/${lat}/lon/${lon}/dist/${radius}`
-  },
-  {
-    name: 'airplanes.live',
-    url: (lat, lon, radius) => `https://api.airplanes.live/v2/point/${lat}/${lon}/${radius}`
-  },
-  {
-    name: 'adsb.one',
-    url: (lat, lon, radius) => `https://api.adsb.one/v2/point/${lat}/${lon}/${radius}`
-  }
 ];
 
 /* ============================================================
@@ -538,62 +526,39 @@ function toDMS(value, posLabel, negLabel) {
 }
 
 /* ============================================================
- *  FETCH AVEC FALLBACK MULTI-SOURCES
+ *  PROXY WORKER (fonction unique pour toutes les APIs)
  * ============================================================ */
-async function fetchAdsB() {
-  const { lat, lon } = state.zone;
-  const radius = state.radiusNm;
+async function fetchViaWorker(targetUrl, timeoutMs = 15000) {
+  const proxyUrl = `${CORS_PROXY}?url=${encodeURIComponent(targetUrl)}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  for (const source of ADSB_SOURCES) {
-    const url = source.url(lat, lon, radius);
-    try {
-      console.log(`📡 Tentative ADS-B via ${source.name}…`);
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 12000);
-
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeout);
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const data = await res.json();
-      // adsb.fi utilise "ac" comme les autres
-      const aircraft = data.ac || data.aircraft || [];
-      if (!Array.isArray(aircraft)) throw new Error('Format invalide');
-
-      console.log(`✅ ADS-B: ${aircraft.length} avions via ${source.name}`);
-      state.adsbSource = source.name;
-      state.adsbError = null;
-      return { aircraft, source: source.name };
-    } catch (e) {
-      console.warn(`❌ ${source.name}: ${e.message}`);
-    }
+  try {
+    const res = await fetch(proxyUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    try { return JSON.parse(text); } catch { return text; }
+  } catch (e) {
+    clearTimeout(timeout);
+    throw new Error(`Worker: ${e.message}`);
   }
-
-  state.adsbError = 'Toutes les sources ADS-B ont échoué';
-  return { aircraft: [], source: '—' };
 }
 
 /* ============================================================
- *  GEOJSON NATURAL EARTH
+ *  GEOJSON NATURAL EARTH (via Worker)
  * ============================================================ */
 async function loadLand() {
-  const urls = [
-    'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson',
-    'https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_110m_land.geojson',
-  ];
-  for (const url of urls) {
-    try {
-      const res = await fetch(url);
-      const geo = await res.json();
-      if (geo && Array.isArray(geo.features)) {
-        state.landFeatures = geo.features;
-        console.log(`✅ ${state.landFeatures.length} polygones chargés`);
-        return true;
-      }
-    } catch (e) {
-      console.warn(`❌ Échec ${url}`, e.message);
+  const url = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson';
+  try {
+    const geo = await fetchViaWorker(url, 20000);
+    if (geo && Array.isArray(geo.features)) {
+      state.landFeatures = geo.features;
+      console.log(`✅ ${state.landFeatures.length} polygones chargés`);
+      return true;
     }
+  } catch (e) {
+    console.warn(`❌ Échec GeoJSON:`, e.message);
   }
   return false;
 }
@@ -814,7 +779,7 @@ function renderTelemesuresSats(sats) {
 }
 
 /* ============================================================
- *  TLE ISS — multi-sources
+ *  TLE ISS
  * ============================================================ */
 let issSatrec = null;
 
@@ -899,7 +864,7 @@ function computeISSPosition() {
 }
 
 /* ============================================================
- *  AVIONS ADS-B (multi-sources)
+ *  AVIONS ADS-B (via Worker)
  * ============================================================ */
 function isMilitary(icao24, callsign) {
   const cs = (callsign || "").toUpperCase();
@@ -934,77 +899,77 @@ function azEl(obsLat, obsLon, obsAlt, lat, lon, altKm) {
 }
 
 async function fetchPlanes() {
-  const { aircraft, source } = await fetchAdsB();
-  if (!aircraft.length) {
-    state.planesError = state.adsbError || 'Aucun avion';
+  const { lat, lon } = state.zone;
+  const radius = state.radiusNm;
+  const targetUrl = `https://api.adsb.lol/v2/point/${lat}/${lon}/${radius}`;
+
+  try {
+    console.log(`📡 ADS-B via Worker…`);
+    const data = await fetchViaWorker(targetUrl, 15000);
+
+    if (!data || !Array.isArray(data.ac)) {
+      throw new Error('Format invalide');
+    }
+
+    const aircraft = data.ac;
+    console.log(`✅ ADS-B: ${aircraft.length} avions`);
+    state.adsbSource = 'adsb.lol (Worker)';
+    state.adsbError = null;
+
+    const planes = [];
+    for (const a of aircraft) {
+      try {
+        if (a.lat == null || a.lon == null) continue;
+        if (a.alt_baro === "ground" || a.alt_baro == null) continue;
+
+        const altFt = typeof a.alt_baro === "number" ? a.alt_baro : 0;
+        const altM = Math.round(altFt * 0.3048);
+        const altKm = altM / 1000;
+        const velKmh = a.gs != null ? Math.round(a.gs * 1.852) : null;
+
+        const { az, el, dist } = azEl(lat, lon, 0.015, a.lat, a.lon, altKm);
+
+        const icao24 = (a.hex || "").toLowerCase();
+        const callsign = (a.flight || "").trim() || icao24;
+        const mil = isMilitary(icao24, callsign);
+
+        planes.push({
+          icao24, callsign,
+          lat: a.lat, lon: a.lon,
+          altFt, altM, velKmh,
+          heading: a.track,
+          az, el, dist,
+          military: mil
+        });
+      } catch (e) { continue; }
+    }
+
+    planes.sort((a, b) => a.dist - b.dist);
+    return planes;
+  } catch (e) {
+    console.error("Erreur fetch avions:", e);
+    state.adsbError = e.message;
     return [];
   }
-
-  const planes = [];
-  for (const a of aircraft) {
-    try {
-      const lat = a.lat, lon = a.lon;
-      if (lat == null || lon == null) continue;
-
-      // Gestion altitude (adsb.fi utilise alt_baro, parfois en pieds)
-      let altFt = 0;
-      if (typeof a.alt_baro === 'number') altFt = a.alt_baro;
-      else if (typeof a.alt_baro === 'string' && a.alt_baro !== 'ground') altFt = parseInt(a.alt_baro) || 0;
-      else if (typeof a.altitude === 'number') altFt = a.altitude;
-
-      const altM = Math.round(altFt * 0.3048);
-      const altKm = altM / 1000;
-
-      // Vitesse (gs en nœuds)
-      let velKmh = null;
-      if (typeof a.gs === 'number') velKmh = Math.round(a.gs * 1.852);
-      else if (typeof a.speed === 'number') velKmh = Math.round(a.speed * 1.852);
-
-      const { az, el, dist } = azEl(
-        state.zone.lat, state.zone.lon, 0.015,
-        lat, lon, altKm
-      );
-
-      const icao24 = (a.hex || a.icao24 || '').toLowerCase();
-      const callsign = (a.flight || a.callsign || '').trim() || icao24;
-      const mil = isMilitary(icao24, callsign);
-
-      planes.push({
-        icao24, callsign, lat, lon,
-        altFt, altM, velKmh,
-        heading: a.track || a.heading,
-        az, el, dist,
-        military: mil
-      });
-    } catch (e) { continue; }
-  }
-
-  planes.sort((a, b) => a.dist - b.dist);
-  state.adsbSource = source;
-  state.planesError = null;
-  return planes;
 }
 
 /* ============================================================
- *  CATALOGUE SATELLITES (CelesTrak JSON)
+ *  CATALOGUE SATELLITES (via Worker)
  * ============================================================ */
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
 
   const celestrakUrl = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json";
-  document.getElementById('catalog-status').textContent = '…';
+  const catalogStatusEl = document.getElementById('catalog-status');
+  if (catalogStatusEl) catalogStatusEl.textContent = '…';
 
   try {
-    console.log('📡 Chargement catalogue CelesTrak…');
-    const res = await fetch(celestrakUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    console.log('📡 Chargement catalogue CelesTrak via Worker…');
+    const catalog = await fetchViaWorker(celestrakUrl, 30000);
 
-    const catalog = await res.json();
-
-    // ✅ VALIDATION CRITIQUE
     if (!Array.isArray(catalog)) {
       console.error("Catalogue non-tableau :", typeof catalog);
-      throw new Error("Catalogue invalide (pas un tableau)");
+      throw new Error("Catalogue invalide");
     }
     if (catalog.length === 0) {
       throw new Error("Catalogue vide");
@@ -1012,7 +977,6 @@ async function loadSatelliteCatalog() {
 
     console.log(`📦 ${catalog.length} entrées dans le catalogue`);
 
-    // Filtrer les satellites avec TLE complet (format JSON CelesTrak utilise TLE_LINE1/TLE_LINE2)
     const satrecs = [];
     for (const sat of catalog) {
       try {
@@ -1034,12 +998,12 @@ async function loadSatelliteCatalog() {
     state.satrecs = satrecs;
     state.catalogLoaded = true;
     state.catalogError = null;
-    document.getElementById('catalog-status').textContent = `${satrecs.length} sats`;
+    if (catalogStatusEl) catalogStatusEl.textContent = `${satrecs.length} sats`;
     console.log(`✅ ${satrecs.length} satellites SGP4 prêts`);
   } catch (e) {
     console.error("Erreur chargement catalogue:", e);
     state.catalogError = e.message;
-    document.getElementById('catalog-status').textContent = 'ERREUR';
+    if (catalogStatusEl) catalogStatusEl.textContent = 'ERREUR';
   }
 }
 
@@ -1097,10 +1061,11 @@ async function refreshAdsB() {
   const planes = await fetchPlanes();
   state.planes = planes;
   state.lastAdsBFetch = Date.now();
-  const adsbStatus = state.planesError
-    ? `Erreur: ${state.planesError.slice(0, 30)}`
+  const adsbStatus = state.adsbError
+    ? `Erreur: ${state.adsbError.slice(0, 30)}`
     : `${state.adsbSource} (${planes.length})`;
-  document.getElementById('adsb-source').textContent = adsbStatus;
+  const el = document.getElementById('adsb-source');
+  if (el) el.textContent = adsbStatus;
   renderTelemesuresPlanes(planes);
 }
 
@@ -1129,15 +1094,15 @@ function loop(ts) {
     }
 
     // Recalcul satellites toutes les 10s
-    if (state.catalogLoaded && ts - state.lastSatsCompute > 10000) {
+    if (state.catalogLoaded && ts - state.lastSatsCompute > SATS_REFRESH_MS) {
       state.lastSatsCompute = ts;
       const sats = computeSatellites();
       state.satellites = filterSatellites(sats);
       renderTelemesuresSats(state.satellites);
     }
 
-    // Refresh ADS-B toutes les 30s
-    if (ts - lastAdsBRefresh > 30000) {
+    // Refresh ADS-B toutes les 15s
+    if (ts - lastAdsBRefresh > ADSB_REFRESH_MS) {
       lastAdsBRefresh = ts;
       refreshAdsB().catch(e => console.warn('ADS-B refresh échoué:', e));
     }
@@ -1152,7 +1117,8 @@ function loop(ts) {
  *  UI
  * ============================================================ */
 function setStatus(msg) {
-  document.getElementById('status').textContent = msg;
+  const el = document.getElementById('status');
+  if (el) el.textContent = msg;
 }
 
 document.getElementById('btn-toggle').addEventListener('click', (e) => {
