@@ -10,9 +10,6 @@
 <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
 
 <style>
-/* ============================================================
-   PALETTE RÉPUBLIQUE FRANÇAISE
-   ============================================================ */
 :root {
   --bleu-france: #000091;
   --bleu-clair: #1212ff;
@@ -27,9 +24,7 @@
   --gris-leger: #929292;
   --noir: #1e1e1e;
 }
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
 body {
   font-family: 'Marianne', 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: var(--gris-fond);
@@ -37,10 +32,6 @@ body {
   padding: 0 0 16px;
   min-height: 100vh;
 }
-
-/* ============================================================
-   BANDEAU D'ÉTAT
-   ============================================================ */
 .bandeau-etat {
   background: var(--blanc);
   border-bottom: 2px solid var(--bleu-france);
@@ -62,8 +53,6 @@ body {
   display: flex; align-items: center; gap: 16px;
   padding: 16px 20px;
 }
-
-/* Bloc Marianne */
 .bloc-marianne {
   display: flex; align-items: center; gap: 14px;
   padding: 10px 18px;
@@ -135,8 +124,6 @@ body {
   font-weight: 400;
   text-transform: none;
 }
-
-/* Liseré tricolore */
 .tricolore {
   position: fixed;
   top: 0; left: 0; right: 0;
@@ -148,10 +135,6 @@ body {
 .tricolore .t-bleu { background: var(--bleu-france); }
 .tricolore .t-blanc { background: var(--blanc); }
 .tricolore .t-rouge { background: var(--rouge-marianne); }
-
-/* ============================================================
-   HEADER
-   ============================================================ */
 .header {
   text-align: center;
   padding: 28px 20px;
@@ -190,19 +173,11 @@ body {
   margin-top: 8px;
   letter-spacing: .5px;
 }
-
-/* ============================================================
-   MAIN
-   ============================================================ */
 .main-container {
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 16px;
 }
-
-/* ============================================================
-   BARRE DE CONTRÔLE
-   ============================================================ */
 .controls {
   background: var(--blanc);
   border: 1px solid var(--gris-bordure);
@@ -259,10 +234,6 @@ body {
   color: var(--blanc);
   border-color: var(--rouge-marianne);
 }
-
-/* ============================================================
-   BANDEAU STATISTIQUES
-   ============================================================ */
 .stats-bar {
   background: var(--blanc);
   border: 1px solid var(--gris-bordure);
@@ -298,10 +269,6 @@ body {
 .stat-value.mil { color: var(--rouge-marianne); }
 .stat-value.sat { color: #d97706; }
 .stat-value.utc { color: var(--gris-texte); font-size: 16px; }
-
-/* ============================================================
-   CARTE
-   ============================================================ */
 .map-container {
   border: 2px solid var(--bleu-france);
   border-radius: 16px;
@@ -371,8 +338,6 @@ body {
   border-bottom: 1px solid var(--gris-bordure);
   text-align: center;
 }
-
-/* Leaflet personnalisé */
 .leaflet-container {
   background: var(--gris-carte) !important;
   font-family: inherit !important;
@@ -409,10 +374,6 @@ body {
   padding-bottom: 4px;
   border-bottom: 1px solid var(--gris-bordure);
 }
-
-/* ============================================================
-   PANNEAUX
-   ============================================================ */
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -420,7 +381,6 @@ body {
   margin-bottom: 16px;
 }
 @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
-
 .panel {
   background: var(--blanc);
   border: 1px solid var(--gris-bordure);
@@ -484,8 +444,6 @@ body {
   color: var(--bleu-france);
   font-weight: 700;
 }
-
-/* Légende */
 .legend {
   display: flex;
   gap: 16px;
@@ -507,10 +465,6 @@ body {
   border-radius: 50%;
   box-shadow: 0 0 4px currentColor;
 }
-
-/* ============================================================
-   FOOTER OFFICIEL
-   ============================================================ */
 .footer-officiel {
   background: var(--blanc);
   border-top: 2px solid var(--bleu-france);
@@ -561,10 +515,6 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-
-/* ============================================================
-   MARQUEURS
-   ============================================================ */
 .plane-marker, .sat-marker, .observer-marker {
   background: transparent;
   border: none;
@@ -591,8 +541,6 @@ body {
   border-radius: 50%;
   box-shadow: 0 0 0 2px var(--bleu-france), 0 0 12px rgba(0,0,145,.5);
 }
-
-/* Scrollbar */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--gris-fond); }
 ::-webkit-scrollbar-thumb {
@@ -600,7 +548,6 @@ body {
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--bleu-france); }
-
 .loading, .error {
   font-size: 11px;
   text-align: center;
@@ -609,10 +556,6 @@ body {
 }
 .loading { color: var(--gris-texte); }
 .error { color: var(--rouge-marianne); }
-
-/* ============================================================
-   RESPONSIVE
-   ============================================================ */
 @media (max-width: 700px) {
   .bandeau-etat-content {
     flex-direction: column;
@@ -638,16 +581,12 @@ body {
 </head>
 <body>
 
-<!-- Liseré tricolore supérieur -->
 <div class="tricolore">
   <span class="t-bleu"></span>
   <span class="t-blanc"></span>
   <span class="t-rouge"></span>
 </div>
 
-<!-- ============================================================
-     BANDEAU D'ÉTAT
-     ============================================================ -->
 <div class="bandeau-etat">
   <div class="bandeau-etat-content">
     <div class="bloc-marianne">
@@ -662,20 +601,18 @@ body {
       <em>Liberté</em>
       <em>Égalité</em>
       <em>Fraternité</em>
-      <div class="ref-legale">Système TACTICAL-ORBIT · v3.0 · NORAD 25544</div>
+      <div class="ref-legale">Système TACTICAL-ORBIT · v3.1 · NORAD 25544</div>
     </div>
   </div>
 </div>
 
 <div class="main-container">
 
-  <!-- HEADER -->
   <div class="header">
     <h1>🛰️ HOUTIS-FACOM · CELLULE DE VEILLE ORMUZ</h1>
     <p>Surveillance aérienne et spatiale · Détroit d'Ormuz · Golfe Persique · Temps réel</p>
   </div>
 
-  <!-- BARRE DE CONTRÔLE -->
   <div class="controls">
     <label>Zone :</label>
     <select id="zone-select">
@@ -716,7 +653,6 @@ body {
     <button id="btn-toggle-sats">🛰️ SATELLITES ON/OFF</button>
   </div>
 
-  <!-- STATISTIQUES -->
   <div class="stats-bar">
     <div class="stat">
       <div class="stat-label">Zone surveillée</div>
@@ -744,7 +680,6 @@ body {
     </div>
   </div>
 
-  <!-- CARTE -->
   <div class="map-container">
     <div id="map"></div>
     <div class="map-overlay">
@@ -758,7 +693,6 @@ body {
     </div>
   </div>
 
-  <!-- PANNEAUX -->
   <div class="grid">
     <div class="panel">
       <div class="panel-title">
@@ -791,9 +725,6 @@ body {
 
 </div>
 
-<!-- ============================================================
-     FOOTER OFFICIEL
-     ============================================================ -->
 <footer class="footer-officiel">
   <div class="devise-footer">Liberté · Égalité · Fraternité</div>
   <div>République Française — Ministère des Armées</div>
@@ -810,9 +741,6 @@ body {
 <script>
 'use strict';
 
-// ============================================================
-// CONFIGURATION
-// ============================================================
 const CONFIG = {
   refreshInterval: 30,
   radiusNm: 250,
@@ -848,9 +776,6 @@ const state = {
   currentSource: '—'
 };
 
-// ============================================================
-// CARTE LEAFLET
-// ============================================================
 const map = L.map('map', {
   center: [state.zone.lat, state.zone.lon],
   zoom: 6,
@@ -865,9 +790,6 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 let coverageCircle = null;
 
-// ============================================================
-// UTILITAIRES
-// ============================================================
 function azEl(obsLat, obsLon, obsAlt, lat, lon, altKm) {
   const R = 6371.0;
   const latR = obsLat * Math.PI / 180;
@@ -918,9 +840,6 @@ function satColor(s) {
   return "#3fb950";
 }
 
-// ============================================================
-// FETCH VIA WORKER
-// ============================================================
 async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
   const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
 
@@ -956,9 +875,6 @@ async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
   throw new Error('Worker: retries épuisés');
 }
 
-// ============================================================
-// FETCH AVIONS
-// ============================================================
 async function fetchPlanes() {
   const { lat, lon } = state.zone;
   const radius = CONFIG.radiusNm;
@@ -1004,51 +920,102 @@ async function fetchPlanes() {
 }
 
 // ============================================================
-// CATALOGUE SATELLITES
+// CATALOGUE SATELLITES — VERSION ROBUSTE
 // ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
-  const celestrakUrl = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json";
+
+  let catalog = null;
+  let source = '—';
+
+  // 1. Essayer le catalogue local d'abord
   try {
-    console.log('📡 Chargement catalogue CelesTrak via Worker…');
-    const catalog = await fetchViaWorker(celestrakUrl, 30000, 2);
-
-    if (!Array.isArray(catalog)) {
-      throw new Error("Catalogue invalide (pas un tableau)");
+    console.log('📡 Chargement catalogue local (data/all_active.json)…');
+    const res = await fetch('data/all_active.json');
+    if (res.ok) {
+      catalog = await res.json();
+      source = 'local';
+      console.log(`✅ Catalogue local chargé (${catalog.length} entrées)`);
     }
-    if (catalog.length === 0) {
-      throw new Error("Catalogue vide");
-    }
-
-    console.log(`📦 ${catalog.length} entrées dans le catalogue`);
-
-    const satrecs = [];
-    let skipped = 0;
-    for (const sat of catalog) {
-      try {
-        const l1 = sat.TLE_LINE1;
-        const l2 = sat.TLE_LINE2;
-        if (!l1 || !l2) { skipped++; continue; }
-
-        const satrec = satellite.twoline2satrec(l1, l2);
-        if (satrec && satrec.error === 0) {
-          satrecs.push({
-            satrec,
-            name: sat.OBJECT_NAME || 'INCONNU',
-            norad: sat.NORAD_CAT_ID
-          });
-        } else {
-          skipped++;
-        }
-      } catch (e) { skipped++; }
-    }
-
-    state.satrecs = satrecs;
-    state.catalogLoaded = true;
-    console.log(`✅ ${satrecs.length} satellites SGP4 chargés (${skipped} ignorés)`);
   } catch (e) {
-    console.error("Erreur chargement catalogue:", e);
+    console.warn('Catalogue local indisponible, fallback Worker…');
   }
+
+  // 2. Fallback via Worker
+  if (!catalog || !Array.isArray(catalog)) {
+    const celestrakUrl = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json";
+    try {
+      console.log('📡 Chargement catalogue CelesTrak via Worker…');
+      catalog = await fetchViaWorker(celestrakUrl, 30000, 2);
+      source = 'Worker';
+    } catch (e) {
+      console.error('Erreur chargement catalogue:', e);
+      return;
+    }
+  }
+
+  if (!Array.isArray(catalog)) {
+    console.error("Catalogue invalide (pas un tableau) :", typeof catalog);
+    return;
+  }
+  if (catalog.length === 0) {
+    console.error("Catalogue vide");
+    return;
+  }
+
+  console.log(`📦 ${catalog.length} entrées dans le catalogue (source: ${source})`);
+
+  // DEBUG : afficher les clés du premier satellite
+  if (catalog.length > 0) {
+    console.log('🔍 Clés du 1er satellite :', Object.keys(catalog[0]).join(', '));
+    const sample = catalog[0];
+    console.log('🔍 Exemple TLE_LINE1 :', sample.TLE_LINE1 ? sample.TLE_LINE1.slice(0, 50) : 'ABSENT');
+    console.log('🔍 Exemple TLE_LINE2 :', sample.TLE_LINE2 ? sample.TLE_LINE2.slice(0, 50) : 'ABSENT');
+  }
+
+  const satrecs = [];
+  let noTle = 0;
+  let badTle = 0;
+  let sgp4Error = 0;
+
+  for (const sat of catalog) {
+    try {
+      // Accepter plusieurs formats de clés
+      const l1 = sat.TLE_LINE1 || sat.tle_line1 || sat.line1 || sat.LINE1;
+      const l2 = sat.TLE_LINE2 || sat.tle_line2 || sat.line2 || sat.LINE2;
+
+      if (!l1 || !l2) {
+        noTle++;
+        continue;
+      }
+
+      // Vérifier que les lignes TLE sont valides
+      const l1s = String(l1).trim();
+      const l2s = String(l2).trim();
+      if (l1s.length < 60 || l2s.length < 60) {
+        badTle++;
+        continue;
+      }
+
+      const satrec = satellite.twoline2satrec(l1s, l2s);
+      if (satrec && satrec.error === 0) {
+        satrecs.push({
+          satrec,
+          name: sat.OBJECT_NAME || sat.object_name || 'INCONNU',
+          norad: sat.NORAD_CAT_ID || sat.norad_cat_id || '?'
+        });
+      } else {
+        sgp4Error++;
+      }
+    } catch (e) {
+      sgp4Error++;
+    }
+  }
+
+  state.satrecs = satrecs;
+  state.catalogLoaded = true;
+  console.log(`✅ ${satrecs.length} satellites SGP4 chargés`);
+  console.log(`   Détails : ${noTle} sans TLE, ${badTle} TLE trop courts, ${sgp4Error} erreurs SGP4`);
 }
 
 function computeSatellites() {
@@ -1099,9 +1066,6 @@ function filterSatellites(sats) {
   });
 }
 
-// ============================================================
-// RENDU CARTE
-// ============================================================
 function clearMarkers() {
   for (const m of state.planeMarkers) map.removeLayer(m);
   for (const m of state.satMarkers) map.removeLayer(m);
@@ -1185,9 +1149,6 @@ function renderMarkers(planes, sats) {
   }
 }
 
-// ============================================================
-// RENDU LISTES
-// ============================================================
 function renderPlanesList(planes) {
   const el = document.getElementById("planes-list");
   const filtered = state.militaryOnly ? planes.filter(p => p.military) : planes;
@@ -1240,9 +1201,6 @@ function renderSatsList(sats) {
   });
 }
 
-// ============================================================
-// REFRESH GLOBAL
-// ============================================================
 async function refresh() {
   const utc = formatUTC();
   document.getElementById("stat-utc").textContent = utc;
@@ -1271,9 +1229,6 @@ async function refresh() {
   renderSatsList(sats);
 }
 
-// ============================================================
-// COUNTDOWN
-// ============================================================
 function startCountdown() {
   state.countdown = CONFIG.refreshInterval;
   setInterval(() => {
@@ -1286,9 +1241,6 @@ function startCountdown() {
   }, 1000);
 }
 
-// ============================================================
-// ÉVÉNEMENTS
-// ============================================================
 document.getElementById("zone-select").addEventListener("change", (e) => {
   const [lat, lon, name] = e.target.value.split(",");
   state.zone = { lat: parseFloat(lat), lon: parseFloat(lon), name };
@@ -1321,9 +1273,6 @@ document.getElementById("btn-toggle-sats").addEventListener("click", (e) => {
   renderMarkers(state.planes, state.satellites);
 });
 
-// ============================================================
-// INIT
-// ============================================================
 document.getElementById("copyrightYear").textContent = new Date().getFullYear();
 map.setView([state.zone.lat, state.zone.lon], 7);
 refresh();
