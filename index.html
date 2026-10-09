@@ -94,7 +94,6 @@ body {
   font-size: 10px;
   color: var(--gris-texte);
   margin-top: 2px;
-  letter-spacing: .3px;
 }
 .bloc-marque-txt .direction {
   display: block;
@@ -171,7 +170,6 @@ body {
   color: var(--gris-texte);
   font-size: 0.95rem;
   margin-top: 8px;
-  letter-spacing: .5px;
 }
 .main-container {
   max-width: 1400px;
@@ -226,9 +224,7 @@ body {
   border-color: var(--rouge-marianne);
   color: var(--rouge-marianne);
 }
-.controls button.btn-rouge:hover {
-  background: var(--rouge-pale);
-}
+.controls button.btn-rouge:hover { background: var(--rouge-pale); }
 .controls button.btn-rouge.active {
   background: var(--rouge-marianne);
   color: var(--blanc);
@@ -247,11 +243,7 @@ body {
   gap: 20px;
   border-top: 3px solid var(--bleu-france);
 }
-.stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
+.stat { display: flex; flex-direction: column; gap: 2px; }
 .stat-label {
   color: var(--gris-leger);
   font-size: 0.6rem;
@@ -350,9 +342,7 @@ body {
   color: var(--gris-leger) !important;
   font-size: 10px !important;
 }
-.leaflet-control-attribution a {
-  color: var(--bleu-france) !important;
-}
+.leaflet-control-attribution a { color: var(--bleu-france) !important; }
 .leaflet-popup-content-wrapper {
   background: var(--blanc) !important;
   color: var(--noir) !important;
@@ -406,10 +396,7 @@ body {
   font-size: 16px;
   font-weight: 800;
 }
-.list {
-  max-height: 400px;
-  overflow-y: auto;
-}
+.list { max-height: 400px; overflow-y: auto; }
 .list-item {
   display: grid;
   grid-template-columns: 1fr auto auto auto;
@@ -420,9 +407,7 @@ body {
   cursor: pointer;
   transition: all 0.15s;
 }
-.list-item:hover {
-  background: var(--bleu-pale);
-}
+.list-item:hover { background: var(--bleu-pale); }
 .list-item .cs {
   color: var(--noir);
   font-weight: 600;
@@ -454,11 +439,7 @@ body {
   font-size: 11px;
   color: var(--gris-texte);
 }
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+.legend-item { display: flex; align-items: center; gap: 6px; }
 .legend-dot {
   width: 10px;
   height: 10px;
@@ -526,9 +507,7 @@ body {
   box-shadow: 0 0 8px currentColor;
   border: 1.5px solid var(--blanc);
 }
-.plane-dot.mil {
-  animation: pulse 1.5s infinite;
-}
+.plane-dot.mil { animation: pulse 1.5s infinite; }
 @keyframes pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50% { transform: scale(1.6); opacity: 0.7; }
@@ -557,25 +536,14 @@ body {
 .loading { color: var(--gris-texte); }
 .error { color: var(--rouge-marianne); }
 @media (max-width: 700px) {
-  .bandeau-etat-content {
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px;
-  }
-  .bloc-devise {
-    margin-left: 0;
-    text-align: center;
-  }
+  .bandeau-etat-content { flex-direction: column; gap: 12px; padding: 12px; }
+  .bloc-devise { margin-left: 0; text-align: center; }
   .bloc-devise em { display: inline; margin: 0 6px; }
   .header h1 { font-size: 1.3rem; }
   .grid { grid-template-columns: 1fr; }
   .controls button { width: 100%; }
   #map { height: 450px; }
-  .stats-bar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
+  .stats-bar { flex-direction: column; align-items: flex-start; gap: 12px; }
 }
 </style>
 </head>
@@ -601,7 +569,7 @@ body {
       <em>Liberté</em>
       <em>Égalité</em>
       <em>Fraternité</em>
-      <div class="ref-legale">Système TACTICAL-ORBIT · v3.1 · NORAD 25544</div>
+      <div class="ref-legale">Système TACTICAL-ORBIT · v3.2 · NORAD 25544</div>
     </div>
   </div>
 </div>
@@ -730,7 +698,7 @@ body {
   <div>République Française — Ministère des Armées</div>
   <div class="mention-legale">
     Cellule de veille stratégique · Surveillance aérienne ADS-B et orbitale SGP4<br>
-    Sources : adsb.lol · CelesTrak · Natural Earth · Carte OpenStreetMap<br>
+    Sources : adsb.lol · adsb.fi · airplanes.live · CelesTrak · OpenStreetMap<br>
     Traitement : Cloudflare Worker · satellite.js · Leaflet
   </div>
   <div class="copyright-footer">
@@ -742,7 +710,7 @@ body {
 'use strict';
 
 const CONFIG = {
-  refreshInterval: 30,
+  refreshInterval: 60,        // 60s pour éviter les 429
   radiusNm: 250,
   minElevation: 5,
   maxListItems: 30,
@@ -840,7 +808,7 @@ function satColor(s) {
   return "#3fb950";
 }
 
-async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
+async function fetchViaWorker(targetUrl, timeoutMs = 20000, maxRetries = 2) {
   const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -851,9 +819,13 @@ async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
       const res = await fetch(proxyUrl, { signal: controller.signal });
       clearTimeout(timeout);
 
-      if (res.status === 429) {
-        const wait = Math.max(30000, Math.pow(2, attempt) * 15000);
-        console.warn(`⏳ 429 reçu (tentative ${attempt + 1}/${maxRetries}), cooldown ${wait/1000}s…`);
+      const source = res.headers.get('X-Source');
+      const cache = res.headers.get('X-Cache');
+      if (source) state.currentSource = source;
+
+      if (res.status === 429 || res.status === 502) {
+        const wait = Math.pow(2, attempt) * 10000;
+        console.warn(`⏳ ${res.status} (tentative ${attempt + 1}/${maxRetries}), retry dans ${wait/1000}s…`);
         await new Promise(r => setTimeout(r, wait));
         continue;
       }
@@ -879,19 +851,17 @@ async function fetchPlanes() {
   const { lat, lon } = state.zone;
   const radius = CONFIG.radiusNm;
   const targetUrl = `https://api.adsb.lol/v2/point/${lat}/${lon}/${radius}`;
-  const sourceName = 'adsb.lol';
 
   try {
-    console.log(`📡 ADS-B via ${sourceName}…`);
-    const data = await fetchViaWorker(targetUrl, 15000, 2);
+    console.log(`📡 ADS-B via Worker (fallback multi-sources)…`);
+    const data = await fetchViaWorker(targetUrl, 20000, 2);
 
     const ac = data.ac || [];
     if (!Array.isArray(ac)) throw new Error('Format invalide');
 
-    console.log(`✅ ADS-B: ${ac.length} avions via ${sourceName}`);
-    state.currentSource = sourceName;
+    console.log(`✅ ADS-B: ${ac.length} avions (source: ${state.currentSource})`);
     const srcEl = document.getElementById('source-name');
-    if (srcEl) srcEl.textContent = sourceName;
+    if (srcEl) srcEl.textContent = state.currentSource;
 
     const planes = [];
     for (const a of ac) {
@@ -919,29 +889,26 @@ async function fetchPlanes() {
   }
 }
 
-// ============================================================
-// CATALOGUE SATELLITES — VERSION ROBUSTE
-// ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
 
   let catalog = null;
   let source = '—';
 
-  // 1. Essayer le catalogue local d'abord
+  // 1. Catalogue local d'abord
   try {
-    console.log('📡 Chargement catalogue local (data/all_active.json)…');
+    console.log('📡 Chargement catalogue local…');
     const res = await fetch('data/all_active.json');
     if (res.ok) {
       catalog = await res.json();
       source = 'local';
-      console.log(`✅ Catalogue local chargé (${catalog.length} entrées)`);
+      console.log(`✅ Catalogue local chargé`);
     }
   } catch (e) {
-    console.warn('Catalogue local indisponible, fallback Worker…');
+    console.warn('Catalogue local indisponible');
   }
 
-  // 2. Fallback via Worker
+  // 2. Fallback Worker
   if (!catalog || !Array.isArray(catalog)) {
     const celestrakUrl = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json";
     try {
@@ -949,54 +916,37 @@ async function loadSatelliteCatalog() {
       catalog = await fetchViaWorker(celestrakUrl, 30000, 2);
       source = 'Worker';
     } catch (e) {
-      console.error('Erreur chargement catalogue:', e);
+      console.error('Erreur catalogue:', e);
       return;
     }
   }
 
-  if (!Array.isArray(catalog)) {
-    console.error("Catalogue invalide (pas un tableau) :", typeof catalog);
-    return;
-  }
-  if (catalog.length === 0) {
-    console.error("Catalogue vide");
+  if (!Array.isArray(catalog) || catalog.length === 0) {
+    console.error("Catalogue invalide ou vide");
     return;
   }
 
-  console.log(`📦 ${catalog.length} entrées dans le catalogue (source: ${source})`);
+  console.log(`📦 ${catalog.length} entrées (source: ${source})`);
 
-  // DEBUG : afficher les clés du premier satellite
-  if (catalog.length > 0) {
-    console.log('🔍 Clés du 1er satellite :', Object.keys(catalog[0]).join(', '));
-    const sample = catalog[0];
-    console.log('🔍 Exemple TLE_LINE1 :', sample.TLE_LINE1 ? sample.TLE_LINE1.slice(0, 50) : 'ABSENT');
-    console.log('🔍 Exemple TLE_LINE2 :', sample.TLE_LINE2 ? sample.TLE_LINE2.slice(0, 50) : 'ABSENT');
-  }
+  // DEBUG
+  const first = catalog[0];
+  console.log('🔍 Clés du 1er satellite :', Object.keys(first).join(', '));
+  console.log('🔍 TLE_LINE1 =', JSON.stringify(first.TLE_LINE1));
+  console.log('🔍 TLE_LINE2 =', JSON.stringify(first.TLE_LINE2));
+  console.log('🔍 OBJECT_NAME =', JSON.stringify(first.OBJECT_NAME));
+  console.log('🔍 Premier objet complet =', JSON.stringify(first).slice(0, 500));
 
   const satrecs = [];
-  let noTle = 0;
-  let badTle = 0;
-  let sgp4Error = 0;
+  let noTle = 0, badTle = 0, sgp4Error = 0;
 
   for (const sat of catalog) {
     try {
-      // Accepter plusieurs formats de clés
       const l1 = sat.TLE_LINE1 || sat.tle_line1 || sat.line1 || sat.LINE1;
       const l2 = sat.TLE_LINE2 || sat.tle_line2 || sat.line2 || sat.LINE2;
-
-      if (!l1 || !l2) {
-        noTle++;
-        continue;
-      }
-
-      // Vérifier que les lignes TLE sont valides
+      if (!l1 || !l2) { noTle++; continue; }
       const l1s = String(l1).trim();
       const l2s = String(l2).trim();
-      if (l1s.length < 60 || l2s.length < 60) {
-        badTle++;
-        continue;
-      }
-
+      if (l1s.length < 60 || l2s.length < 60) { badTle++; continue; }
       const satrec = satellite.twoline2satrec(l1s, l2s);
       if (satrec && satrec.error === 0) {
         satrecs.push({
@@ -1007,43 +957,33 @@ async function loadSatelliteCatalog() {
       } else {
         sgp4Error++;
       }
-    } catch (e) {
-      sgp4Error++;
-    }
+    } catch (e) { sgp4Error++; }
   }
 
   state.satrecs = satrecs;
   state.catalogLoaded = true;
   console.log(`✅ ${satrecs.length} satellites SGP4 chargés`);
-  console.log(`   Détails : ${noTle} sans TLE, ${badTle} TLE trop courts, ${sgp4Error} erreurs SGP4`);
+  console.log(`   ${noTle} sans TLE | ${badTle} TLE courts | ${sgp4Error} erreurs SGP4`);
 }
 
 function computeSatellites() {
   if (!state.satrecs.length) return [];
-
   const now = new Date();
   const gmst = satellite.gstime(now);
   const sats = [];
-
   for (const { satrec, name, norad } of state.satrecs) {
     try {
-      const positionAndVelocity = satellite.propagate(satrec, now);
-      if (positionAndVelocity.error) continue;
-      const positionEci = positionAndVelocity.position;
-      if (!positionEci) continue;
-
-      const positionGd = satellite.eciToGeodetic(positionEci, gmst);
-      const lon = satellite.degreesLong(positionGd.longitude);
-      const lat = satellite.degreesLat(positionGd.latitude);
-      const alt = positionGd.height;
-
+      const pv = satellite.propagate(satrec, now);
+      if (pv.error || !pv.position) continue;
+      const gd = satellite.eciToGeodetic(pv.position, gmst);
+      const lon = satellite.degreesLong(gd.longitude);
+      const lat = satellite.degreesLat(gd.latitude);
+      const alt = gd.height;
       const { az, el, dist } = azEl(state.zone.lat, state.zone.lon, 0.015, lat, lon, alt);
       if (el < CONFIG.minElevation) continue;
-
       sats.push({ norad, name, lat, lon, alt, az, el, dist });
     } catch (e) { continue; }
   }
-
   sats.sort((a, b) => b.el - a.el);
   return sats;
 }
@@ -1168,9 +1108,7 @@ function renderPlanesList(planes) {
 
   el.querySelectorAll(".list-item").forEach(item => {
     item.addEventListener("click", () => {
-      const lat = parseFloat(item.dataset.lat);
-      const lon = parseFloat(item.dataset.lon);
-      map.setView([lat, lon], 10);
+      map.setView([parseFloat(item.dataset.lat), parseFloat(item.dataset.lon)], 10);
     });
   });
 }
@@ -1194,9 +1132,7 @@ function renderSatsList(sats) {
 
   el.querySelectorAll(".list-item").forEach(item => {
     item.addEventListener("click", () => {
-      const lat = parseFloat(item.dataset.lat);
-      const lon = parseFloat(item.dataset.lon);
-      map.setView([lat, lon], 5);
+      map.setView([parseFloat(item.dataset.lat), parseFloat(item.dataset.lon)], 5);
     });
   });
 }
