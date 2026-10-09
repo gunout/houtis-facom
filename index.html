@@ -369,7 +369,7 @@
 </div>
 
 <div class="footer">
-  SOURCE : adsb.lol / adsb.fi via Cloudflare Worker + CelesTrak (satellites) // 
+  SOURCE : adsb.lol (avions) + CelesTrak (satellites) via Cloudflare Worker // 
   <a href="https://github.com/gunout/houtis-facom" target="_blank">github.com/gunout/houtis-facom</a> // 
   SGP4 via satellite.js // Carte Leaflet + OpenStreetMap
 </div>
@@ -383,7 +383,6 @@ const CONFIG = {
   radiusNm: 250,
   minElevation: 5,
   maxListItems: 30,
-  // Worker Cloudflare
   workerUrl: 'https://facom-proxy.gunout.workers.dev',
   militaryPrefixes: [
     "RCH","REACH","DUKE","MAGIC","HAWK","VIPER","TITAN","SPAR","EVAC",
@@ -411,7 +410,6 @@ const state = {
   satMarkers: [],
   observerMarker: null,
   catalogLoaded: false,
-  useAdsbFi: false,  // alternance
   currentSource: '—'
 };
 
@@ -499,7 +497,7 @@ async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
       const res = await fetch(proxyUrl, { signal: controller.signal });
       clearTimeout(timeout);
 
-      // 429 : cooldown 30s minimum (documenté adsb.lol)
+      // 429 : cooldown 30s minimum
       if (res.status === 429) {
         const wait = Math.max(30000, Math.pow(2, attempt) * 15000);
         console.warn(`⏳ 429 reçu (tentative ${attempt + 1}/${maxRetries}), cooldown ${wait/1000}s…`);
@@ -525,29 +523,18 @@ async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
 }
 
 // ============================================================
-// Fetch avions — ALTERNANCE adsb.lol ↔ adsb.fi
+// Fetch avions — adsb.lol uniquement (adsb.fi bloque les Workers)
 // ============================================================
 async function fetchPlanes() {
   const { lat, lon } = state.zone;
   const radius = CONFIG.radiusNm;
-
-  // Alterner à chaque appel
-  state.useAdsbFi = !state.useAdsbFi;
-
-  let targetUrl, sourceName;
-  if (state.useAdsbFi) {
-    targetUrl = `https://opendata.adsb.fi/api/v3/lat/${lat}/lon/${lon}/dist/${radius}`;
-    sourceName = 'adsb.fi';
-  } else {
-    targetUrl = `https://api.adsb.lol/v2/point/${lat}/${lon}/${radius}`;
-    sourceName = 'adsb.lol';
-  }
+  const targetUrl = `https://api.adsb.lol/v2/point/${lat}/${lon}/${radius}`;
+  const sourceName = 'adsb.lol';
 
   try {
     console.log(`📡 ADS-B via ${sourceName}…`);
     const data = await fetchViaWorker(targetUrl, 15000, 2);
 
-    // adsb.lol et adsb.fi retournent tous deux "ac"
     const ac = data.ac || [];
     if (!Array.isArray(ac)) throw new Error('Format invalide');
 
@@ -577,7 +564,7 @@ async function fetchPlanes() {
     planes.sort((a, b) => a.dist - b.dist);
     return planes;
   } catch (e) {
-    console.error(`Erreur fetch avions (${sourceName}):`, e);
+    console.error(`Erreur fetch avions:`, e);
     return [];
   }
 }
@@ -602,20 +589,30 @@ async function loadSatelliteCatalog() {
     console.log(`📦 ${catalog.length} entrées dans le catalogue`);
 
     const satrecs = [];
+    let skipped = 0;
     for (const sat of catalog) {
       try {
+        // ✅ CORRECTIF : utiliser TLE_LINE1 / TLE_LINE2 (format JSON CelesTrak)
         const l1 = sat.TLE_LINE1;
         const l2 = sat.TLE_LINE2;
-        if (!l1 || !l2) continue;
+        if (!l1 || !l2) { skipped++; continue; }
+
         const satrec = satellite.twoline2satrec(l1, l2);
         if (satrec && satrec.error === 0) {
-          satrecs.push({ satrec, name: sat.OBJECT_NAME, norad: sat.NORAD_CAT_ID });
+          satrecs.push({
+            satrec,
+            name: sat.OBJECT_NAME || 'INCONNU',
+            norad: sat.NORAD_CAT_ID
+          });
+        } else {
+          skipped++;
         }
-      } catch (e) { continue; }
+      } catch (e) { skipped++; }
     }
+
     state.satrecs = satrecs;
     state.catalogLoaded = true;
-    console.log(`✅ ${satrecs.length} satellites SGP4 chargés`);
+    console.log(`✅ ${satrecs.length} satellites SGP4 chargés (${skipped} ignorés)`);
   } catch (e) {
     console.error("Erreur chargement catalogue:", e);
   }
