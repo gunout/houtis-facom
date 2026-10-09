@@ -1,1 +1,876 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radar Unifié — Avions + Satellites | Moyen-Orient</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg-panel: #11161f;
+    --border: #1f2937;
+    --text: #c9d1d9;
+    --text-dim: #6e7681;
+    --green: #3fb950;
+    --amber: #d29922;
+    --red: #f85149;
+    --cyan: #58a6ff;
+    --gold: #e3b341;
+    --magenta: #bc8cff;
+  }
 
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 16px;
+  }
+
+  .header {
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header h1 {
+    font-size: 16px;
+    color: var(--gold);
+    letter-spacing: 2px;
+    font-weight: 600;
+  }
+
+  .header .sub {
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  .stats {
+    display: flex;
+    gap: 24px;
+    font-size: 12px;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .stat-label {
+    color: var(--text-dim);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .stat-value {
+    color: var(--cyan);
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .stat-value.mil { color: var(--red); }
+  .stat-value.sat { color: var(--gold); }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .controls select, .controls button {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+
+  .controls select:hover, .controls button:hover {
+    border-color: var(--cyan);
+  }
+
+  .controls button.active {
+    background: var(--cyan);
+    color: var(--bg);
+    font-weight: 600;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    padding: 16px;
+  }
+
+  .panel-title {
+    color: var(--gold);
+    font-size: 12px;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .panel-title .count {
+    color: var(--cyan);
+    font-size: 14px;
+  }
+
+  .radar {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+
+  .radar svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .radar .ring {
+    fill: none;
+    stroke: #1f2937;
+    stroke-width: 1;
+  }
+
+  .radar .axis {
+    stroke: #1f2937;
+    stroke-width: 1;
+  }
+
+  .radar .label {
+    fill: var(--text-dim);
+    font-size: 10px;
+    font-family: inherit;
+  }
+
+  .radar .sweep {
+    fill: rgba(88, 166, 255, 0.05);
+    transform-origin: center;
+  }
+
+  .radar .blip {
+    cursor: pointer;
+    transition: r 0.2s;
+  }
+
+  .radar .blip:hover {
+    r: 5;
+  }
+
+  .list {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .list-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 12px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #161b22;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .list-item:hover {
+    background: #161b22;
+  }
+
+  .list-item .cs {
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .list-item .cs.mil {
+    color: var(--red);
+    font-weight: 600;
+  }
+
+  .list-item .num {
+    color: var(--text-dim);
+    text-align: right;
+    min-width: 50px;
+  }
+
+  .list-item .num.highlight {
+    color: var(--cyan);
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .footer {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 16px;
+    border-top: 1px solid var(--border);
+    margin-top: 16px;
+  }
+
+  .footer a {
+    color: var(--cyan);
+    text-decoration: none;
+  }
+
+  .loading {
+    color: var(--amber);
+    font-size: 11px;
+    text-align: center;
+    padding: 8px;
+  }
+
+  .error {
+    color: var(--red);
+    font-size: 11px;
+    text-align: center;
+    padding: 8px;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>🛰️ RADAR UNIFIÉ — MOYEN-ORIENT</h1>
+    <div class="sub">AVIONS (ADS-B) + SATELLITES (TLE) // LIVE</div>
+  </div>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Zone</div>
+      <div class="stat-value" id="stat-zone">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Avions</div>
+      <div class="stat-value" id="stat-planes">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Militaires</div>
+      <div class="stat-value mil" id="stat-mil">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Satellites</div>
+      <div class="stat-value sat" id="stat-sats">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">UTC</div>
+      <div class="stat-value" id="stat-utc">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <label style="color: var(--text-dim);">Zone :</label>
+  <select id="zone-select">
+    <option value="23.59,58.41,Mascate (Oman)">Mascate (Oman)</option>
+    <option value="25.25,55.36,Dubaï (EAU)">Dubaï (EAU)</option>
+    <option value="24.71,46.67,Riyad (Arabie saoudite)">Riyad (Arabie saoudite)</option>
+    <option value="25.27,51.60,Doha (Qatar)">Doha (Qatar)</option>
+    <option value="26.57,56.25,Détroit d'Ormuz">Détroit d'Ormuz</option>
+    <option value="29.22,47.98,Koweït">Koweït</option>
+    <option value="24.43,54.65,Abu Dhabi (EAU)">Abu Dhabi (EAU)</option>
+    <option value="26.07,50.55,Bahreïn">Bahreïn</option>
+    <option value="35.69,51.39,Téhéran (Iran)">Téhéran (Iran)</option>
+    <option value="33.31,44.36,Bagdad (Irak)">Bagdad (Irak)</option>
+    <option value="15.37,44.19,Sanaa (Yémen)">Sanaa (Yémen)</option>
+    <option value="30.04,31.24,Le Caire (Égypte)">Le Caire (Égypte)</option>
+  </select>
+
+  <label style="color: var(--text-dim);">Filtre satellites :</label>
+  <select id="sat-filter">
+    <option value="all">Tous</option>
+    <option value="leo">LEO</option>
+    <option value="meo">MEO</option>
+    <option value="geo">GEO</option>
+    <option value="starlink">Starlink</option>
+    <option value="oneweb">OneWeb</option>
+    <option value="nav">Navigation</option>
+    <option value="stations">Stations</option>
+  </select>
+
+  <button id="btn-refresh">⟳ RAFRAÎCHIR</button>
+  <button id="btn-toggle-mil">MILITAIRE UNIQUEMENT</button>
+  <span style="color: var(--text-dim); font-size: 11px; margin-left: auto;">
+    Auto-refresh : <span id="countdown">30</span>s
+  </span>
+</div>
+
+<div class="grid">
+  <!-- Radar avions -->
+  <div class="panel">
+    <div class="panel-title">
+      <span>✈️ AVIONS</span>
+      <span class="count" id="planes-count">0</span>
+    </div>
+    <div class="radar" id="radar-planes"></div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Basse alt</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--cyan)"></div> Moyenne</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div> Haute</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Militaire</div>
+    </div>
+    <div class="list" id="planes-list"></div>
+  </div>
+
+  <!-- Radar satellites -->
+  <div class="panel">
+    <div class="panel-title">
+      <span>🛰️ SATELLITES</span>
+      <span class="count" id="sats-count">0</span>
+    </div>
+    <div class="radar" id="radar-sats"></div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> LEO bas</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div> LEO haut</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--gold)"></div> MEO</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> GEO</div>
+    </div>
+    <div class="list" id="sats-list"></div>
+  </div>
+</div>
+
+<div class="footer">
+  SOURCE : adsb.lol (avions) + CelesTrak (satellites) // 
+  <a href="https://github.com/votre-user/radar-unified" target="_blank">GitHub</a> // 
+  Déployé via GitHub Pages
+</div>
+
+<script>
+// ============================================================
+// Configuration
+// ============================================================
+const CONFIG = {
+  refreshInterval: 30,      // secondes
+  radiusNm: 250,            // rayon ADS-B (max 250)
+  minElevation: 5,          // élévation min satellites (degrés)
+  maxListItems: 20,
+  militaryPrefixes: [
+    "RCH","REACH","DUKE","MAGIC","HAWK","VIPER","TITAN","SPAR","EVAC",
+    "ASCOT","JAKE","HOMER","PYTHON","RRR","RFR","TARTAN","FAF","COTAM",
+    "CTM","GAF","GAM","IAM","CFC","CANFORCE","RAAF","RNZAF","AUSSIE",
+    "KIWI","SVA","UAE","KSA","RSF","BAHRAIN","QAF","KAF","THK","TURK",
+    "EGY","JOR","RAM","NATO","AWACS","SENTRY","TANKER","UAV","RQ","MQ",
+    "FORTE","GLOBAL"
+  ],
+  militaryIcaoPrefixes: [
+    "ae","43c","3f","38","44","48","4b","71","76","06","70","72","73","4d","45"
+  ]
+};
+
+// État global
+const state = {
+  zone: { lat: 23.59, lon: 58.41, name: "Mascate (Oman)" },
+  planes: [],
+  satellites: [],
+  satFilter: "all",
+  militaryOnly: false,
+  countdown: CONFIG.refreshInterval,
+  satellitesCatalog: null
+};
+
+// ============================================================
+// Utilitaires
+// ============================================================
+function distance3D(lat1, lon1, alt1, lat2, lon2, alt2) {
+  const R = 6371.0;
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const horiz = R * c;
+  const vert = alt2 - alt1;
+  return Math.sqrt(horiz**2 + vert**2);
+}
+
+function azEl(obsLat, obsLon, obsAlt, lat, lon, altKm) {
+  const R = 6371.0;
+  const latR = obsLat * Math.PI / 180;
+  const lonR = obsLon * Math.PI / 180;
+  const latS = lat * Math.PI / 180;
+  const lonS = lon * Math.PI / 180;
+
+  const ox = (R + obsAlt) * Math.cos(latR) * Math.cos(lonR);
+  const oy = (R + obsAlt) * Math.cos(latR) * Math.sin(lonR);
+  const oz = (R + obsAlt) * Math.sin(latR);
+  const sx = (R + altKm) * Math.cos(latS) * Math.cos(lonS);
+  const sy = (R + altKm) * Math.cos(latS) * Math.sin(lonS);
+  const sz = (R + altKm) * Math.sin(latS);
+
+  const dx = sx - ox, dy = sy - oy, dz = sz - oz;
+  const sl = Math.sin(latR), cl = Math.cos(latR);
+  const so = Math.sin(lonR), co = Math.cos(lonR);
+
+  const s = sl * co * dx + sl * so * dy - cl * dz;
+  const e = -so * dx + co * dy;
+  const z = cl * co * dx + cl * so * dy + sl * dz;
+
+  const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+  const az = (Math.atan2(e, -s) * 180 / Math.PI + 360) % 360;
+  const el = Math.asin(z / dist) * 180 / Math.PI;
+  return { az, el, dist };
+}
+
+function isMilitary(icao24, callsign) {
+  const cs = (callsign || "").toUpperCase();
+  for (const p of CONFIG.militaryPrefixes) {
+    if (cs.startsWith(p)) return true;
+  }
+  const ic = (icao24 || "").toLowerCase();
+  for (const p of CONFIG.militaryIcaoPrefixes) {
+    if (ic.startsWith(p)) return true;
+  }
+  return false;
+}
+
+function formatUTC() {
+  const d = new Date();
+  return d.toISOString().slice(11, 19);
+}
+
+// ============================================================
+// Fetch avions (adsb.lol)
+// ============================================================
+async function fetchPlanes() {
+  const url = `https://api.adsb.lol/v2/point/${state.zone.lat}/${state.zone.lon}/${CONFIG.radiusNm}`;
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Radar-Unified/1.0" } });
+    const data = await res.json();
+    const ac = data.ac || [];
+
+    const planes = [];
+    for (const a of ac) {
+      if (a.lat == null || a.lon == null) continue;
+      if (a.alt_baro === "ground" || a.alt_baro == null) continue;
+
+      const altFt = typeof a.alt_baro === "number" ? a.alt_baro : 0;
+      const altM = Math.round(altFt * 0.3048);
+      const altKm = altM / 1000;
+      const velKmh = a.gs != null ? Math.round(a.gs * 1.852) : null;
+
+      const { az, el, dist } = azEl(
+        state.zone.lat, state.zone.lon, 0.015,
+        a.lat, a.lon, altKm
+      );
+
+      const icao24 = (a.hex || "").toLowerCase();
+      const callsign = (a.flight || "").trim() || icao24;
+      const mil = isMilitary(icao24, callsign);
+
+      planes.push({
+        icao24, callsign,
+        lat: a.lat, lon: a.lon,
+        altFt, altM, velKmh,
+        heading: a.track,
+        az, el, dist,
+        military: mil
+      });
+    }
+
+    planes.sort((a, b) => a.dist - b.dist);
+    return planes;
+  } catch (e) {
+    console.error("Erreur fetch avions:", e);
+    return [];
+  }
+}
+
+// ============================================================
+// Fetch satellites (CelesTrak + calcul SGP4 simplifié)
+// ============================================================
+// Note : le calcul SGP4 complet nécessite une bibliothèque.
+// Ici on utilise un calcul orbital simplifié (Kepler) à partir des TLE.
+// Pour un calcul précis, utilisez satellite.js en production.
+
+async function fetchSatellites() {
+  // CelesTrak ne supporte pas CORS direct, on utilise un proxy
+  // Pour GitHub Pages, on peut soit :
+  // 1. Utiliser un proxy CORS (corsproxy.io)
+  // 2. Pré-télécharger le catalogue via GitHub Actions
+  // Ici on utilise un proxy public
+
+  const proxyUrl = "https://corsproxy.io/?";
+  const celestrakUrl = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json";
+
+  try {
+    const res = await fetch(proxyUrl + encodeURIComponent(celestrakUrl));
+    const catalog = await res.json();
+    state.satellitesCatalog = catalog;
+    return computeSatellites(catalog);
+  } catch (e) {
+    console.error("Erreur fetch satellites:", e);
+    // Fallback : données simulées si le proxy échoue
+    return [];
+  }
+}
+
+function computeSatellites(catalog) {
+  // Calcul orbital simplifié à partir des TLE
+  // Pour une précision réelle, il faut SGP4 (satellite.js)
+  const now = new Date();
+  const jd = now.getTime() / 86400000 + 2440587.5;
+  const gmst = ((280.46061837 + 360.98564736629 * (jd - 2451545.0)) % 360 + 360) % 360;
+  const g = gmst * Math.PI / 180;
+
+  const sats = [];
+  for (const sat of catalog) {
+    try {
+      const mm = parseFloat(sat.MEAN_MOTION);
+      if (!mm) continue;
+      const inc = parseFloat(sat.INCLINATION) * Math.PI / 180;
+      const raan = parseFloat(sat.RA_OF_ASC_NODE) * Math.PI / 180;
+      const ecc = parseFloat(sat.ECCENTRICITY) || 0;
+      const argp = parseFloat(sat.ARG_OF_PERICENTER) * Math.PI / 180;
+      const ma = parseFloat(sat.MEAN_ANOMALY) * Math.PI / 180;
+
+      // Demi-grand axe
+      const n = mm * 2 * Math.PI / 86400; // rad/s
+      const mu = 398600.4418;
+      const a = Math.cbrt(mu / (n * n));
+
+      // Position dans le plan orbital (approximation circulaire)
+      const r = a * (1 - ecc * Math.cos(ma));
+      const nu = ma + 2 * ecc * Math.sin(ma); // vraie anomalie approx
+
+      const xOrb = r * Math.cos(nu);
+      const yOrb = r * Math.sin(nu);
+
+      // Rotation vers ECI
+      const cosO = Math.cos(raan), sinO = Math.sin(raan);
+      const cosI = Math.cos(inc), sinI = Math.sin(inc);
+      const cosW = Math.cos(argp), sinW = Math.sin(argp);
+
+      const x = (cosO * cosW - sinO * sinW * cosI) * xOrb + (-cosO * sinW - sinO * cosW * cosI) * yOrb;
+      const y = (sinO * cosW + cosO * sinW * cosI) * xOrb + (-sinO * sinW + cosO * cosW * cosI) * yOrb;
+      const z = (sinW * sinI) * xOrb + (cosW * sinI) * yOrb;
+
+      // ECI → ECEF
+      const xr = x * Math.cos(g) + y * Math.sin(g);
+      const yr = -x * Math.sin(g) + y * Math.cos(g);
+      const lon = Math.atan2(yr, xr) * 180 / Math.PI;
+      const lat = Math.atan2(z, Math.sqrt(xr*xr + yr*yr)) * 180 / Math.PI;
+      const alt = Math.sqrt(xr*xr + yr*yr + z*z) - 6371;
+
+      const { az, el, dist } = azEl(
+        state.zone.lat, state.zone.lon, 0.015,
+        lat, lon, alt
+      );
+
+      if (el < CONFIG.minElevation) continue;
+
+      sats.push({
+        norad: sat.NORAD_CAT_ID,
+        name: sat.OBJECT_NAME,
+        lat, lon, alt,
+        az, el, dist,
+        period: 86400 / mm
+      });
+    } catch (e) {
+      continue;
+    }
+  }
+
+  sats.sort((a, b) => b.el - a.el);
+  return sats;
+}
+
+function filterSatellites(sats) {
+  const f = state.satFilter;
+  return sats.filter(s => {
+    const n = s.name.toUpperCase();
+    const alt = s.alt;
+    switch (f) {
+      case "leo": return alt < 2000;
+      case "meo": return alt >= 2000 && alt < 30000;
+      case "geo": return alt >= 30000;
+      case "starlink": return n.includes("STARLINK");
+      case "oneweb": return n.includes("ONEWEB");
+      case "nav": return ["GPS","GALILEO","GLONASS","BEIDOU","NAVSTAR","GSAT"].some(x => n.includes(x));
+      case "stations": return ["ISS","CSS","TIANHE","ZARYA"].some(x => n.includes(x));
+      default: return true;
+    }
+  });
+}
+
+// ============================================================
+// Rendu SVG — Radar avions
+// ============================================================
+function renderRadarPlanes(planes) {
+  const el = document.getElementById("radar-planes");
+  const size = 500;
+  const c = size / 2;
+  const maxDist = CONFIG.radiusNm * 1.852;
+
+  let svg = `<svg viewBox="0 0 ${size} ${size}">`;
+
+  // Anneaux
+  for (const r of [0.25, 0.5, 0.75, 1.0]) {
+    svg += `<circle class="ring" cx="${c}" cy="${c}" r="${c * r - 10}"/>`;
+  }
+
+  // Axes
+  svg += `<line class="axis" x1="${c}" y1="10" x2="${c}" y2="${size-10}"/>`;
+  svg += `<line class="axis" x1="10" y1="${c}" x2="${size-10}" y2="${c}"/>`;
+
+  // Labels cardinaux
+  svg += `<text class="label" x="${c}" y="20" text-anchor="middle">N</text>`;
+  svg += `<text class="label" x="${c}" y="${size-8}" text-anchor="middle">S</text>`;
+  svg += `<text class="label" x="14" y="${c+4}">W</text>`;
+  svg += `<text class="label" x="${size-14}" y="${c+4}" text-anchor="end">E</text>`;
+
+  // Centre
+  svg += `<circle cx="${c}" cy="${c}" r="4" fill="#58a6ff"/>`;
+
+  // Avions
+  for (const p of planes) {
+    const r = (p.dist / maxDist) * (c - 15);
+    const angle = (90 - p.az) * Math.PI / 180;
+    const x = c + r * Math.cos(angle);
+    const y = c - r * Math.sin(angle);
+
+    let color = "#3fb950";
+    if (p.military) color = "#f85149";
+    else if (p.altFt > 30000) color = "#d29922";
+    else if (p.altFt > 10000) color = "#58a6ff";
+
+    const radius = p.military ? 4 : 3;
+    svg += `<circle class="blip" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${radius}" 
+            fill="${color}" opacity="0.9">
+            <title>${p.callsign} — ${p.altFt} ft — ${p.velKmh || "?"} km/h — ${p.dist.toFixed(0)} km</title>
+            </circle>`;
+  }
+
+  svg += `</svg>`;
+  el.innerHTML = svg;
+}
+
+// ============================================================
+// Rendu SVG — Radar satellites
+// ============================================================
+function renderRadarSats(sats) {
+  const el = document.getElementById("radar-sats");
+  const size = 500;
+  const c = size / 2;
+
+  let svg = `<svg viewBox="0 0 ${size} ${size}">`;
+
+  // Anneaux
+  for (const r of [0.25, 0.5, 0.75, 1.0]) {
+    svg += `<circle class="ring" cx="${c}" cy="${c}" r="${c * r - 10}"/>`;
+  }
+
+  // Axes
+  svg += `<line class="axis" x1="${c}" y1="10" x2="${c}" y2="${size-10}"/>`;
+  svg += `<line class="axis" x1="10" y1="${c}" x2="${size-10}" y2="${c}"/>`;
+
+  // Labels cardinaux
+  svg += `<text class="label" x="${c}" y="20" text-anchor="middle">N</text>`;
+  svg += `<text class="label" x="${c}" y="${size-8}" text-anchor="middle">S</text>`;
+  svg += `<text class="label" x="14" y="${c+4}">W</text>`;
+  svg += `<text class="label" x="${size-14}" y="${c+4}" text-anchor="end">E</text>`;
+
+  // Centre
+  svg += `<circle cx="${c}" cy="${c}" r="4" fill="#e3b341"/>`;
+
+  // Satellites
+  for (const s of sats) {
+    const r = ((90 - s.el) / 90) * (c - 15);
+    const angle = (90 - s.az) * Math.PI / 180;
+    const x = c + r * Math.cos(angle);
+    const y = c - r * Math.sin(angle);
+
+    let color = "#3fb950";
+    if (s.alt >= 30000) color = "#f85149";
+    else if (s.alt >= 2000) color = "#e3b341";
+    else if (s.alt >= 500) color = "#d29922";
+
+    svg += `<circle class="blip" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" 
+            fill="${color}" opacity="0.9">
+            <title>${s.name} — ${s.alt.toFixed(0)} km — ${s.el.toFixed(1)}°</title>
+            </circle>`;
+  }
+
+  svg += `</svg>`;
+  el.innerHTML = svg;
+}
+
+// ============================================================
+// Rendu listes
+// ============================================================
+function renderPlanesList(planes) {
+  const el = document.getElementById("planes-list");
+  const filtered = state.militaryOnly ? planes.filter(p => p.military) : planes;
+  const items = filtered.slice(0, CONFIG.maxListItems);
+
+  if (items.length === 0) {
+    el.innerHTML = '<div class="loading">Aucun avion dans la zone</div>';
+    return;
+  }
+
+  el.innerHTML = items.map(p => `
+    <div class="list-item">
+      <span class="cs ${p.military ? 'mil' : ''}">${p.callsign}</span>
+      <span class="num">${p.altFt.toLocaleString()} ft</span>
+      <span class="num">${p.velKmh || "—"} km/h</span>
+      <span class="num highlight">${p.dist.toFixed(0)} km</span>
+    </div>
+  `).join("");
+}
+
+function renderSatsList(sats) {
+  const el = document.getElementById("sats-list");
+  const items = sats.slice(0, CONFIG.maxListItems);
+
+  if (items.length === 0) {
+    el.innerHTML = '<div class="loading">Aucun satellite visible</div>';
+    return;
+  }
+
+  el.innerHTML = items.map(s => `
+    <div class="list-item">
+      <span class="cs">${s.name}</span>
+      <span class="num">${s.alt.toFixed(0)} km</span>
+      <span class="num">${s.el.toFixed(1)}°</span>
+      <span class="num highlight">${s.dist.toFixed(0)} km</span>
+    </div>
+  `).join("");
+}
+
+// ============================================================
+// Mise à jour globale
+// ============================================================
+async function refresh() {
+  document.getElementById("stat-utc").textContent = formatUTC();
+  document.getElementById("stat-zone").textContent = state.zone.name.split(" ")[0];
+
+  // Avions
+  const planes = await fetchPlanes();
+  state.planes = planes;
+  const milCount = planes.filter(p => p.military).length;
+  document.getElementById("stat-planes").textContent = planes.length;
+  document.getElementById("stat-mil").textContent = milCount;
+  document.getElementById("planes-count").textContent = planes.length;
+  renderRadarPlanes(planes);
+  renderPlanesList(planes);
+
+  // Satellites
+  const sats = await fetchSatellites();
+  const filteredSats = filterSatellites(sats);
+  state.satellites = filteredSats;
+  document.getElementById("stat-sats").textContent = filteredSats.length;
+  document.getElementById("sats-count").textContent = filteredSats.length;
+  renderRadarSats(filteredSats);
+  renderSatsList(filteredSats);
+}
+
+// ============================================================
+// Countdown + auto-refresh
+// ============================================================
+function startCountdown() {
+  state.countdown = CONFIG.refreshInterval;
+  setInterval(() => {
+    state.countdown--;
+    document.getElementById("countdown").textContent = state.countdown;
+    if (state.countdown <= 0) {
+      state.countdown = CONFIG.refreshInterval;
+      refresh();
+    }
+  }, 1000);
+}
+
+// ============================================================
+// Événements
+// ============================================================
+document.getElementById("zone-select").addEventListener("change", (e) => {
+  const [lat, lon, name] = e.target.value.split(",");
+  state.zone = { lat: parseFloat(lat), lon: parseFloat(lon), name };
+  refresh();
+});
+
+document.getElementById("sat-filter").addEventListener("change", (e) => {
+  state.satFilter = e.target.value;
+  const filtered = filterSatellites(state.satellites);
+  renderRadarSats(filtered);
+  renderSatsList(filtered);
+  document.getElementById("sats-count").textContent = filtered.length;
+  document.getElementById("stat-sats").textContent = filtered.length;
+});
+
+document.getElementById("btn-refresh").addEventListener("click", refresh);
+
+document.getElementById("btn-toggle-mil").addEventListener("click", (e) => {
+  state.militaryOnly = !state.militaryOnly;
+  e.target.classList.toggle("active", state.militaryOnly);
+  renderPlanesList(state.planes);
+});
+
+// ============================================================
+// Init
+// ============================================================
+refresh();
+startCountdown();
+</script>
+</body>
+</html>
