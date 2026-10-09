@@ -3,269 +3,727 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HOUTIS-FACOM — Ormuz | Radar Unifié</title>
+<title>🇫🇷 HOUTIS-FACOM · Cellule de Veille Ormuz | République Française</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
 
 <style>
-  :root {
-    --bg: #0a0e14;
-    --bg-panel: #11161f;
-    --border: #1f2937;
-    --text: #c9d1d9;
-    --text-dim: #6e7681;
-    --green: #3fb950;
-    --amber: #d29922;
-    --red: #f85149;
-    --cyan: #58a6ff;
-    --gold: #e3b341;
-    --magenta: #bc8cff;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'SF Mono', 'Monaco', 'Consolas', 'Courier New', monospace;
-    font-size: 13px;
-    line-height: 1.5;
-    min-height: 100vh;
-    padding: 16px;
-  }
-  .header {
-    border: 1px solid var(--border);
-    background: var(--bg-panel);
-    padding: 16px 20px;
-    margin-bottom: 16px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-  }
-  .header h1 {
-    font-size: 16px;
-    color: var(--gold);
-    letter-spacing: 2px;
-    font-weight: 600;
-  }
-  .header .sub {
-    color: var(--text-dim);
-    font-size: 11px;
-    letter-spacing: 1px;
-    margin-top: 4px;
-  }
-  .stats { display: flex; gap: 24px; font-size: 12px; }
-  .stat { display: flex; flex-direction: column; align-items: flex-end; }
-  .stat-label {
-    color: var(--text-dim);
-    font-size: 10px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-  }
-  .stat-value { color: var(--cyan); font-size: 18px; font-weight: 600; }
-  .stat-value.mil { color: var(--red); }
-  .stat-value.sat { color: var(--gold); }
-  .controls {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-  .controls select, .controls button {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 8px 12px;
-    font-family: inherit;
-    font-size: 12px;
-    cursor: pointer;
-    letter-spacing: 1px;
-  }
-  .controls select:hover, .controls button:hover { border-color: var(--cyan); }
-  .controls button.active {
-    background: var(--cyan);
-    color: var(--bg);
-    font-weight: 600;
-  }
-  .map-container {
-    border: 1px solid var(--border);
-    background: var(--bg-panel);
-    margin-bottom: 16px;
-    position: relative;
-  }
-  #map {
-    width: 100%;
-    height: 600px;
-    background: #0a0e14;
-  }
-  .map-overlay {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(17, 22, 31, 0.9);
-    border: 1px solid var(--border);
-    padding: 10px 14px;
-    font-size: 11px;
-    z-index: 1000;
-    pointer-events: none;
-  }
-  .map-overlay .row {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 4px;
-  }
-  .map-overlay .label { color: var(--text-dim); }
-  .map-overlay .value { color: var(--cyan); font-weight: 600; }
-  .map-overlay .value.mil { color: var(--red); }
-  .map-overlay .value.sat { color: var(--gold); }
+/* ============================================================
+   PALETTE RÉPUBLIQUE FRANÇAISE
+   ============================================================ */
+:root {
+  --bleu-france: #000091;
+  --bleu-clair: #1212ff;
+  --bleu-pale: #e3e3fd;
+  --blanc: #ffffff;
+  --rouge-marianne: #E1000F;
+  --rouge-pale: #ffe9e9;
+  --gris-fond: #f6f6f6;
+  --gris-carte: #eeeeee;
+  --gris-bordure: #e5e5e5;
+  --gris-texte: #3a3a3a;
+  --gris-leger: #929292;
+  --noir: #1e1e1e;
+}
 
-  .leaflet-container {
-    background: #0a0e14 !important;
-    font-family: inherit !important;
-  }
-  .leaflet-tile {
-    filter: brightness(0.6) contrast(1.2) hue-rotate(180deg) invert(1);
-  }
-  .leaflet-control-attribution {
-    background: rgba(10, 14, 20, 0.8) !important;
-    color: var(--text-dim) !important;
-    font-size: 10px !important;
-  }
-  .leaflet-control-attribution a {
-    color: var(--cyan) !important;
-  }
-  .leaflet-popup-content-wrapper {
-    background: var(--bg-panel) !important;
-    color: var(--text) !important;
-    border: 1px solid var(--border);
-    border-radius: 0;
-  }
-  .leaflet-popup-tip { background: var(--bg-panel) !important; }
-  .leaflet-popup-content {
-    font-family: inherit !important;
-    font-size: 11px !important;
-    margin: 8px 12px !important;
-  }
-  .leaflet-popup-content b { color: var(--gold); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-  .grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 16px;
-  }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
-  .panel {
-    border: 1px solid var(--border);
-    background: var(--bg-panel);
-    padding: 16px;
-  }
-  .panel-title {
-    color: var(--gold);
-    font-size: 12px;
-    letter-spacing: 2px;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .panel-title .count { color: var(--cyan); font-size: 14px; }
-  .list { max-height: 400px; overflow-y: auto; }
-  .list-item {
-    display: grid;
-    grid-template-columns: 1fr auto auto auto;
+body {
+  font-family: 'Marianne', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--gris-fond);
+  color: var(--noir);
+  padding: 0 0 16px;
+  min-height: 100vh;
+}
+
+/* ============================================================
+   BANDEAU D'ÉTAT
+   ============================================================ */
+.bandeau-etat {
+  background: var(--blanc);
+  border-bottom: 2px solid var(--bleu-france);
+  position: relative;
+  margin-bottom: 20px;
+}
+.bandeau-etat::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(to right,
+    var(--bleu-france) 0 33.33%,
+    var(--blanc) 33.33% 66.66%,
+    var(--rouge-marianne) 66.66% 100%);
+}
+.bandeau-etat-content {
+  max-width: 1400px; margin: 0 auto;
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px;
+}
+
+/* Bloc Marianne */
+.bloc-marianne {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 18px;
+  background: var(--blanc);
+  border-left: 4px solid var(--bleu-france);
+  border-right: 4px solid var(--rouge-marianne);
+  flex-shrink: 0;
+}
+.marianne-sceau {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--bleu-clair), var(--bleu-france));
+  color: var(--blanc);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 17px;
+  border: 3px solid var(--blanc);
+  box-shadow: 0 0 0 2px var(--bleu-france), 0 4px 12px rgba(0,0,145,.25);
+  letter-spacing: .5px;
+  position: relative;
+}
+.marianne-sceau::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px dashed rgba(0,0,145,.3);
+}
+.bloc-marque-txt { font-size: 11px; color: var(--gris-texte); line-height: 1.4; }
+.bloc-marque-txt .republique {
+  display: block;
+  font-weight: 800;
+  color: var(--bleu-france);
+  font-size: 16px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.bloc-marque-txt .ministere {
+  display: block;
+  font-size: 10px;
+  color: var(--gris-texte);
+  margin-top: 2px;
+  letter-spacing: .3px;
+}
+.bloc-marque-txt .direction {
+  display: block;
+  font-size: 9px;
+  color: var(--gris-leger);
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.bloc-devise {
+  margin-left: auto;
+  text-align: right;
+  font-size: 11px;
+  color: var(--bleu-france);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.bloc-devise em { display: block; font-style: normal; }
+.bloc-devise .ref-legale {
+  font-family: monospace;
+  font-size: 8px;
+  color: var(--gris-leger);
+  letter-spacing: .5px;
+  margin-top: 4px;
+  font-weight: 400;
+  text-transform: none;
+}
+
+/* Liseré tricolore */
+.tricolore {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  display: flex;
+  z-index: 1000;
+}
+.tricolore span { flex: 1; }
+.tricolore .t-bleu { background: var(--bleu-france); }
+.tricolore .t-blanc { background: var(--blanc); }
+.tricolore .t-rouge { background: var(--rouge-marianne); }
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.header {
+  text-align: center;
+  padding: 28px 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, var(--blanc), #f0f3ff);
+  border-radius: 16px;
+  border: 1px solid var(--gris-bordure);
+  position: relative;
+  overflow: hidden;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 6px;
+  background: linear-gradient(90deg,
+    var(--bleu-france) 0%, var(--bleu-france) 33.33%,
+    var(--blanc) 33.33%, var(--blanc) 66.66%,
+    var(--rouge-marianne) 66.66%, var(--rouge-marianne) 100%);
+}
+.header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  background: linear-gradient(90deg, var(--bleu-france), var(--bleu-clair), var(--rouge-marianne));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.header p {
+  color: var(--gris-texte);
+  font-size: 0.95rem;
+  margin-top: 8px;
+  letter-spacing: .5px;
+}
+
+/* ============================================================
+   MAIN
+   ============================================================ */
+.main-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* ============================================================
+   BARRE DE CONTRÔLE
+   ============================================================ */
+.controls {
+  background: var(--blanc);
+  border: 1px solid var(--gris-bordure);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,145,.04);
+}
+.controls label {
+  color: var(--gris-leger);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+}
+.controls select,
+.controls button {
+  background: var(--blanc);
+  border: 1px solid var(--gris-bordure);
+  color: var(--gris-texte);
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 20px;
+  letter-spacing: .5px;
+  transition: all 0.2s;
+}
+.controls select:hover,
+.controls button:hover {
+  border-color: var(--bleu-france);
+  color: var(--bleu-france);
+  background: var(--bleu-pale);
+}
+.controls button.active {
+  background: var(--bleu-france);
+  color: var(--blanc);
+  border-color: var(--bleu-france);
+}
+.controls button.btn-rouge {
+  border-color: var(--rouge-marianne);
+  color: var(--rouge-marianne);
+}
+.controls button.btn-rouge:hover {
+  background: var(--rouge-pale);
+}
+.controls button.btn-rouge.active {
+  background: var(--rouge-marianne);
+  color: var(--blanc);
+  border-color: var(--rouge-marianne);
+}
+
+/* ============================================================
+   BANDEAU STATISTIQUES
+   ============================================================ */
+.stats-bar {
+  background: var(--blanc);
+  border: 1px solid var(--gris-bordure);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  border-top: 3px solid var(--bleu-france);
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat-label {
+  color: var(--gris-leger);
+  font-size: 0.6rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.stat-value {
+  color: var(--bleu-france);
+  font-size: 20px;
+  font-weight: 800;
+  font-family: 'Marianne', monospace;
+  letter-spacing: 1px;
+}
+.stat-value.mil { color: var(--rouge-marianne); }
+.stat-value.sat { color: #d97706; }
+.stat-value.utc { color: var(--gris-texte); font-size: 16px; }
+
+/* ============================================================
+   CARTE
+   ============================================================ */
+.map-container {
+  border: 2px solid var(--bleu-france);
+  border-radius: 16px;
+  background: var(--blanc);
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,145,.08);
+}
+.map-container::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg,
+    var(--bleu-france) 0 33.33%,
+    var(--blanc) 33.33% 66.66%,
+    var(--rouge-marianne) 66.66% 100%);
+  z-index: 500;
+}
+#map {
+  width: 100%;
+  height: 620px;
+  background: var(--gris-carte);
+}
+.map-overlay {
+  position: absolute;
+  top: 14px; right: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--bleu-france);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 11px;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,145,.15);
+  min-width: 200px;
+}
+.map-overlay .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 5px;
+}
+.map-overlay .label {
+  color: var(--gris-leger);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+.map-overlay .value {
+  color: var(--bleu-france);
+  font-weight: 800;
+  font-size: 12px;
+}
+.map-overlay .value.mil { color: var(--rouge-marianne); }
+.map-overlay .value.sat { color: #d97706; }
+.map-overlay .titre {
+  color: var(--bleu-france);
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--gris-bordure);
+  text-align: center;
+}
+
+/* Leaflet personnalisé */
+.leaflet-container {
+  background: var(--gris-carte) !important;
+  font-family: inherit !important;
+}
+.leaflet-tile {
+  filter: brightness(1.05) contrast(0.95) saturate(0.85);
+}
+.leaflet-control-attribution {
+  background: rgba(255,255,255,0.9) !important;
+  color: var(--gris-leger) !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a {
+  color: var(--bleu-france) !important;
+}
+.leaflet-popup-content-wrapper {
+  background: var(--blanc) !important;
+  color: var(--noir) !important;
+  border: 2px solid var(--bleu-france);
+  border-radius: 10px;
+}
+.leaflet-popup-tip { background: var(--blanc) !important; }
+.leaflet-popup-content {
+  font-family: inherit !important;
+  font-size: 12px !important;
+  margin: 10px 14px !important;
+  line-height: 1.5;
+}
+.leaflet-popup-content b {
+  color: var(--bleu-france);
+  font-size: 13px;
+  display: block;
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--gris-bordure);
+}
+
+/* ============================================================
+   PANNEAUX
+   ============================================================ */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--blanc);
+  border: 1px solid var(--gris-bordure);
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,145,.04);
+}
+.panel-title {
+  color: var(--bleu-france);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-weight: 800;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--bleu-pale);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.panel-title .count {
+  color: var(--rouge-marianne);
+  font-size: 16px;
+  font-weight: 800;
+}
+.list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+.list-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--gris-bordure);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.list-item:hover {
+  background: var(--bleu-pale);
+}
+.list-item .cs {
+  color: var(--noir);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-item .cs.mil {
+  color: var(--rouge-marianne);
+  font-weight: 800;
+}
+.list-item .num {
+  color: var(--gris-texte);
+  text-align: right;
+  min-width: 60px;
+  font-family: monospace;
+}
+.list-item .num.highlight {
+  color: var(--bleu-france);
+  font-weight: 700;
+}
+
+/* Légende */
+.legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--gris-bordure);
+  font-size: 11px;
+  color: var(--gris-texte);
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 4px currentColor;
+}
+
+/* ============================================================
+   FOOTER OFFICIEL
+   ============================================================ */
+.footer-officiel {
+  background: var(--blanc);
+  border-top: 2px solid var(--bleu-france);
+  padding: 28px 20px 20px;
+  text-align: center;
+  color: var(--gris-texte);
+  font-size: 12px;
+  margin-top: 40px;
+  position: relative;
+}
+.footer-officiel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(to right,
+    var(--bleu-france) 0 33.33%,
+    var(--blanc) 33.33% 66.66%,
+    var(--rouge-marianne) 66.66% 100%);
+}
+.footer-officiel .devise-footer {
+  font-size: 14px;
+  color: var(--bleu-france);
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+.footer-officiel .mention-legale {
+  color: var(--gris-leger);
+  font-size: 10px;
+  font-family: monospace;
+  letter-spacing: .5px;
+  margin-top: 10px;
+  line-height: 1.7;
+}
+.footer-officiel .copyright-footer {
+  margin-top: 14px;
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--gris-leger);
+}
+.footer-officiel .copyright-footer .sig {
+  font-weight: 800;
+  letter-spacing: 2px;
+  background: linear-gradient(90deg, var(--bleu-france), var(--rouge-marianne));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================================
+   MARQUEURS
+   ============================================================ */
+.plane-marker, .sat-marker, .observer-marker {
+  background: transparent;
+  border: none;
+}
+.plane-dot, .sat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+  border: 1.5px solid var(--blanc);
+}
+.plane-dot.mil {
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.6); opacity: 0.7; }
+}
+.observer-dot {
+  width: 14px;
+  height: 14px;
+  background: var(--bleu-france);
+  border: 3px solid var(--blanc);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--bleu-france), 0 0 12px rgba(0,0,145,.5);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--gris-fond); }
+::-webkit-scrollbar-thumb {
+  background: var(--gris-bordure);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--bleu-france); }
+
+.loading, .error {
+  font-size: 11px;
+  text-align: center;
+  padding: 12px;
+  font-style: italic;
+}
+.loading { color: var(--gris-texte); }
+.error { color: var(--rouge-marianne); }
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 700px) {
+  .bandeau-etat-content {
+    flex-direction: column;
     gap: 12px;
-    padding: 6px 8px;
-    border-bottom: 1px solid #161b22;
-    font-size: 11px;
-    cursor: pointer;
+    padding: 12px;
   }
-  .list-item:hover { background: #161b22; }
-  .list-item .cs {
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .list-item .cs.mil { color: var(--red); font-weight: 600; }
-  .list-item .num { color: var(--text-dim); text-align: right; min-width: 50px; }
-  .list-item .num.highlight { color: var(--cyan); }
-  .legend {
-    display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
-    margin-top: 12px;
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-  .legend-item { display: flex; align-items: center; gap: 6px; }
-  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
-  .footer {
+  .bloc-devise {
+    margin-left: 0;
     text-align: center;
-    color: var(--text-dim);
-    font-size: 11px;
-    letter-spacing: 1px;
-    padding: 16px;
-    border-top: 1px solid var(--border);
-    margin-top: 16px;
   }
-  .footer a { color: var(--cyan); text-decoration: none; }
-  .loading { color: var(--amber); font-size: 11px; text-align: center; padding: 8px; }
-  .error { color: var(--red); font-size: 11px; text-align: center; padding: 8px; }
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border); }
-  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
-
-  .plane-marker, .sat-marker {
-    background: transparent;
-    border: none;
+  .bloc-devise em { display: inline; margin: 0 6px; }
+  .header h1 { font-size: 1.3rem; }
+  .grid { grid-template-columns: 1fr; }
+  .controls button { width: 100%; }
+  #map { height: 450px; }
+  .stats-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
-  .plane-dot, .sat-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    box-shadow: 0 0 6px currentColor;
-  }
-  .plane-dot.mil { animation: pulse 1.5s infinite; }
-  @keyframes pulse {
-    0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.5); opacity: 0.7; }
-  }
-  .observer-marker {
-    background: transparent;
-    border: none;
-  }
-  .observer-dot {
-    width: 12px;
-    height: 12px;
-    background: var(--gold);
-    border: 2px solid var(--bg);
-    border-radius: 50%;
-    box-shadow: 0 0 10px var(--gold);
-  }
+}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div>
-    <h1>🛰️ HOUTIS-FACOM — DÉTROIT D'ORMUZ</h1>
-    <div class="sub">SURVEILLANCE AVIONS (ADS-B) + SATELLITES (SGP4) // GOLFE PERSIQUE</div>
+<!-- Liseré tricolore supérieur -->
+<div class="tricolore">
+  <span class="t-bleu"></span>
+  <span class="t-blanc"></span>
+  <span class="t-rouge"></span>
+</div>
+
+<!-- ============================================================
+     BANDEAU D'ÉTAT
+     ============================================================ -->
+<div class="bandeau-etat">
+  <div class="bandeau-etat-content">
+    <div class="bloc-marianne">
+      <div class="marianne-sceau">RF</div>
+      <div class="bloc-marque-txt">
+        <span class="republique">République Française</span>
+        <span class="ministere">Ministère des Armées<br>Direction Générale de la Sécurité Extérieure</span>
+        <span class="direction">Cellule de veille stratégique · Détroit d'Ormuz</span>
+      </div>
+    </div>
+    <div class="bloc-devise">
+      <em>Liberté</em>
+      <em>Égalité</em>
+      <em>Fraternité</em>
+      <div class="ref-legale">Système TACTICAL-ORBIT · v3.0 · NORAD 25544</div>
+    </div>
   </div>
-  <div class="stats">
+</div>
+
+<div class="main-container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <h1>🛰️ HOUTIS-FACOM · CELLULE DE VEILLE ORMUZ</h1>
+    <p>Surveillance aérienne et spatiale · Détroit d'Ormuz · Golfe Persique · Temps réel</p>
+  </div>
+
+  <!-- BARRE DE CONTRÔLE -->
+  <div class="controls">
+    <label>Zone :</label>
+    <select id="zone-select">
+      <option value="26.57,56.25,Détroit d'Ormuz">★ Détroit d'Ormuz</option>
+      <option value="26.50,56.20,Ormuz (sud)">Ormuz (sud)</option>
+      <option value="26.20,56.25,Bande d'Ormuz (nord)">Bande d'Ormuz (nord)</option>
+      <option value="27.20,56.30,Bandar Abbas (Iran)">Bandar Abbas (Iran)</option>
+      <option value="26.50,55.00,Île de Qeshm (Iran)">Île de Qeshm (Iran)</option>
+      <option value="25.60,57.00,Golfe d'Oman">Golfe d'Oman</option>
+      <option value="25.10,56.30,Fujairah (EAU)">Fujairah (EAU)</option>
+      <option value="25.25,55.36,Dubaï (EAU)">Dubaï (EAU)</option>
+      <option value="24.43,54.65,Abu Dhabi (EAU)">Abu Dhabi (EAU)</option>
+      <option value="25.27,51.60,Doha (Qatar)">Doha (Qatar)</option>
+      <option value="26.07,50.55,Bahreïn">Bahreïn</option>
+      <option value="29.22,47.98,Koweït">Koweït</option>
+      <option value="23.59,58.41,Mascate (Oman)">Mascate (Oman)</option>
+      <option value="24.71,46.67,Riyad (Arabie saoudite)">Riyad (Arabie saoudite)</option>
+      <option value="35.69,51.39,Téhéran (Iran)">Téhéran (Iran)</option>
+      <option value="33.31,44.36,Bagdad (Irak)">Bagdad (Irak)</option>
+      <option value="15.37,44.19,Sanaa (Yémen)">Sanaa (Yémen)</option>
+      <option value="30.04,31.24,Le Caire (Égypte)">Le Caire (Égypte)</option>
+    </select>
+
+    <label>Satellites :</label>
+    <select id="sat-filter">
+      <option value="all">Tous</option>
+      <option value="leo">LEO</option>
+      <option value="meo">MEO</option>
+      <option value="geo">GEO</option>
+      <option value="starlink">Starlink</option>
+      <option value="oneweb">OneWeb</option>
+      <option value="nav">Navigation</option>
+      <option value="stations">Stations</option>
+    </select>
+
+    <button id="btn-refresh">⟳ RAFRAÎCHIR</button>
+    <button id="btn-toggle-mil" class="btn-rouge">🎖️ MILITAIRE UNIQUEMENT</button>
+    <button id="btn-toggle-sats">🛰️ SATELLITES ON/OFF</button>
+  </div>
+
+  <!-- STATISTIQUES -->
+  <div class="stats-bar">
     <div class="stat">
-      <div class="stat-label">Zone</div>
+      <div class="stat-label">Zone surveillée</div>
       <div class="stat-value" id="stat-zone">—</div>
     </div>
     <div class="stat">
-      <div class="stat-label">Avions</div>
+      <div class="stat-label">Avions détectés</div>
       <div class="stat-value" id="stat-planes">0</div>
     </div>
     <div class="stat">
@@ -273,110 +731,87 @@
       <div class="stat-value mil" id="stat-mil">0</div>
     </div>
     <div class="stat">
-      <div class="stat-label">Satellites</div>
+      <div class="stat-label">Satellites visibles</div>
       <div class="stat-value sat" id="stat-sats">0</div>
     </div>
     <div class="stat">
-      <div class="stat-label">UTC</div>
-      <div class="stat-value" id="stat-utc">—</div>
+      <div class="stat-label">Temps UTC</div>
+      <div class="stat-value utc" id="stat-utc">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Prochaine actualisation</div>
+      <div class="stat-value utc"><span id="countdown">30</span>s</div>
     </div>
   </div>
-</div>
 
-<div class="controls">
-  <label style="color: var(--text-dim);">Zone :</label>
-  <select id="zone-select">
-    <option value="26.57,56.25,Détroit d'Ormuz">★ Détroit d'Ormuz</option>
-    <option value="26.50,56.20,Ormuz (sud)">Ormuz (sud)</option>
-    <option value="26.20,56.25,Bande d'Ormuz (nord)">Bande d'Ormuz (nord)</option>
-    <option value="27.20,56.30,Bandar Abbas (Iran)">Bandar Abbas (Iran)</option>
-    <option value="26.50,55.00,Île de Qeshm (Iran)">Île de Qeshm (Iran)</option>
-    <option value="25.60,57.00,Golfe d'Oman">Golfe d'Oman</option>
-    <option value="25.10,56.30,Fujairah (EAU)">Fujairah (EAU)</option>
-    <option value="25.25,55.36,Dubaï (EAU)">Dubaï (EAU)</option>
-    <option value="24.43,54.65,Abu Dhabi (EAU)">Abu Dhabi (EAU)</option>
-    <option value="25.27,51.60,Doha (Qatar)">Doha (Qatar)</option>
-    <option value="26.07,50.55,Bahreïn">Bahreïn</option>
-    <option value="29.22,47.98,Koweït">Koweït</option>
-    <option value="23.59,58.41,Mascate (Oman)">Mascate (Oman)</option>
-    <option value="24.71,46.67,Riyad (Arabie saoudite)">Riyad (Arabie saoudite)</option>
-    <option value="35.69,51.39,Téhéran (Iran)">Téhéran (Iran)</option>
-    <option value="33.31,44.36,Bagdad (Irak)">Bagdad (Irak)</option>
-    <option value="15.37,44.19,Sanaa (Yémen)">Sanaa (Yémen)</option>
-    <option value="30.04,31.24,Le Caire (Égypte)">Le Caire (Égypte)</option>
-  </select>
-
-  <label style="color: var(--text-dim);">Filtre satellites :</label>
-  <select id="sat-filter">
-    <option value="all">Tous</option>
-    <option value="leo">LEO</option>
-    <option value="meo">MEO</option>
-    <option value="geo">GEO</option>
-    <option value="starlink">Starlink</option>
-    <option value="oneweb">OneWeb</option>
-    <option value="nav">Navigation</option>
-    <option value="stations">Stations</option>
-  </select>
-
-  <button id="btn-refresh">⟳ RAFRAÎCHIR</button>
-  <button id="btn-toggle-mil">MILITAIRE UNIQUEMENT</button>
-  <button id="btn-toggle-sats">SATELLITES ON/OFF</button>
-  <span style="color: var(--text-dim); font-size: 11px; margin-left: auto;">
-    Source : <span id="source-name" style="color: var(--cyan);">—</span> · 
-    Auto-refresh : <span id="countdown">30</span>s
-  </span>
-</div>
-
-<div class="map-container">
-  <div id="map"></div>
-  <div class="map-overlay">
-    <div class="row"><span class="label">Zone</span><span class="value" id="ov-zone">—</span></div>
-    <div class="row"><span class="label">Avions</span><span class="value" id="ov-planes">0</span></div>
-    <div class="row"><span class="label">Militaires</span><span class="value mil" id="ov-mil">0</span></div>
-    <div class="row"><span class="label">Satellites</span><span class="value sat" id="ov-sats">0</span></div>
-    <div class="row"><span class="label">UTC</span><span class="value" id="ov-utc">—</span></div>
-  </div>
-</div>
-
-<div class="grid">
-  <div class="panel">
-    <div class="panel-title">
-      <span>✈️ AVIONS</span>
-      <span class="count" id="planes-count">0</span>
+  <!-- CARTE -->
+  <div class="map-container">
+    <div id="map"></div>
+    <div class="map-overlay">
+      <div class="titre">🇫🇷 SITUATION TACTIQUE</div>
+      <div class="row"><span class="label">Zone</span><span class="value" id="ov-zone">—</span></div>
+      <div class="row"><span class="label">Avions</span><span class="value" id="ov-planes">0</span></div>
+      <div class="row"><span class="label">Militaires</span><span class="value mil" id="ov-mil">0</span></div>
+      <div class="row"><span class="label">Satellites</span><span class="value sat" id="ov-sats">0</span></div>
+      <div class="row"><span class="label">Source</span><span class="value" id="source-name" style="font-size:10px;">—</span></div>
+      <div class="row"><span class="label">UTC</span><span class="value" id="ov-utc">—</span></div>
     </div>
-    <div class="legend">
-      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Basse</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--cyan)"></div> Moyenne</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div> Haute</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Militaire</div>
-    </div>
-    <div class="list" id="planes-list"></div>
   </div>
 
-  <div class="panel">
-    <div class="panel-title">
-      <span>🛰️ SATELLITES</span>
-      <span class="count" id="sats-count">0</span>
+  <!-- PANNEAUX -->
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-title">
+        <span>✈️ Contacts aériens</span>
+        <span class="count" id="planes-count">0</span>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div> Basse alt.</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div> Moyenne</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> Haute</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#E1000F"></div> Militaire</div>
+      </div>
+      <div class="list" id="planes-list"></div>
     </div>
-    <div class="legend">
-      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> LEO bas</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div> LEO haut</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--gold)"></div> MEO</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> GEO</div>
+
+    <div class="panel">
+      <div class="panel-title">
+        <span>🛰️ Constellation orbitale</span>
+        <span class="count" id="sats-count">0</span>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div> LEO bas</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> LEO haut</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#e3b341"></div> MEO</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#E1000F"></div> GEO</div>
+      </div>
+      <div class="list" id="sats-list"></div>
     </div>
-    <div class="list" id="sats-list"></div>
   </div>
+
 </div>
 
-<div class="footer">
-  SOURCE : adsb.lol (avions) + CelesTrak (satellites) via Cloudflare Worker // 
-  <a href="https://github.com/gunout/houtis-facom" target="_blank">github.com/gunout/houtis-facom</a> // 
-  SGP4 via satellite.js // Carte Leaflet + OpenStreetMap
-</div>
+<!-- ============================================================
+     FOOTER OFFICIEL
+     ============================================================ -->
+<footer class="footer-officiel">
+  <div class="devise-footer">Liberté · Égalité · Fraternité</div>
+  <div>République Française — Ministère des Armées</div>
+  <div class="mention-legale">
+    Cellule de veille stratégique · Surveillance aérienne ADS-B et orbitale SGP4<br>
+    Sources : adsb.lol · CelesTrak · Natural Earth · Carte OpenStreetMap<br>
+    Traitement : Cloudflare Worker · satellite.js · Leaflet
+  </div>
+  <div class="copyright-footer">
+    © <span id="copyrightYear">2026</span> · <span class="sig">HOUTIS-FACOM</span> · gunout · Tous droits réservés
+  </div>
+</footer>
 
 <script>
+'use strict';
+
 // ============================================================
-// Configuration
+// CONFIGURATION
 // ============================================================
 const CONFIG = {
   refreshInterval: 30,
@@ -414,7 +849,7 @@ const state = {
 };
 
 // ============================================================
-// Carte Leaflet
+// CARTE LEAFLET
 // ============================================================
 const map = L.map('map', {
   center: [state.zone.lat, state.zone.lon],
@@ -431,7 +866,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 let coverageCircle = null;
 
 // ============================================================
-// Utilitaires
+// UTILITAIRES
 // ============================================================
 function azEl(obsLat, obsLon, obsAlt, lat, lon, altKm) {
   const R = 6371.0;
@@ -470,21 +905,21 @@ function formatUTC() {
 }
 
 function planeColor(p) {
-  if (p.military) return "#f85149";
+  if (p.military) return "#E1000F";
   if (p.altFt > 30000) return "#d29922";
   if (p.altFt > 10000) return "#58a6ff";
   return "#3fb950";
 }
 
 function satColor(s) {
-  if (s.alt >= 30000) return "#f85149";
+  if (s.alt >= 30000) return "#E1000F";
   if (s.alt >= 2000) return "#e3b341";
   if (s.alt >= 500) return "#d29922";
   return "#3fb950";
 }
 
 // ============================================================
-// Fetch via Worker avec retry + backoff 30s
+// FETCH VIA WORKER
 // ============================================================
 async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
   const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
@@ -497,7 +932,6 @@ async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
       const res = await fetch(proxyUrl, { signal: controller.signal });
       clearTimeout(timeout);
 
-      // 429 : cooldown 30s minimum
       if (res.status === 429) {
         const wait = Math.max(30000, Math.pow(2, attempt) * 15000);
         console.warn(`⏳ 429 reçu (tentative ${attempt + 1}/${maxRetries}), cooldown ${wait/1000}s…`);
@@ -512,7 +946,7 @@ async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
     } catch (e) {
       clearTimeout(timeout);
       if (attempt === maxRetries - 1) {
-        throw new Error(`Worker (après ${maxRetries} tentatives): ${e.message}`);
+        throw new Error(`Worker: ${e.message}`);
       }
       const wait = Math.pow(2, attempt) * 5000;
       console.warn(`⚠️ Erreur (${e.message}), retry dans ${wait/1000}s…`);
@@ -523,7 +957,7 @@ async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
 }
 
 // ============================================================
-// Fetch avions — adsb.lol uniquement (adsb.fi bloque les Workers)
+// FETCH AVIONS
 // ============================================================
 async function fetchPlanes() {
   const { lat, lon } = state.zone;
@@ -570,7 +1004,7 @@ async function fetchPlanes() {
 }
 
 // ============================================================
-// Fetch satellites SGP4 (via Worker)
+// CATALOGUE SATELLITES
 // ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
@@ -592,7 +1026,6 @@ async function loadSatelliteCatalog() {
     let skipped = 0;
     for (const sat of catalog) {
       try {
-        // ✅ CORRECTIF : utiliser TLE_LINE1 / TLE_LINE2 (format JSON CelesTrak)
         const l1 = sat.TLE_LINE1;
         const l2 = sat.TLE_LINE2;
         if (!l1 || !l2) { skipped++; continue; }
@@ -667,7 +1100,7 @@ function filterSatellites(sats) {
 }
 
 // ============================================================
-// Rendu carte
+// RENDU CARTE
 // ============================================================
 function clearMarkers() {
   for (const m of state.planeMarkers) map.removeLayer(m);
@@ -684,19 +1117,19 @@ function renderMarkers(planes, sats) {
     icon: L.divIcon({
       className: 'observer-marker',
       html: '<div class="observer-dot"></div>',
-      iconSize: [12, 12],
-      iconAnchor: [6, 6]
+      iconSize: [14, 14],
+      iconAnchor: [7, 7]
     })
-  }).addTo(map).bindPopup(`<b>${state.zone.name}</b><br>Station d'observation`);
+  }).addTo(map).bindPopup(`<b>${state.zone.name}</b><br>Station de surveillance · République Française`);
 
   if (coverageCircle) map.removeLayer(coverageCircle);
   coverageCircle = L.circle([state.zone.lat, state.zone.lon], {
     radius: CONFIG.radiusNm * 1852,
-    color: '#58a6ff',
-    fillColor: '#58a6ff',
-    fillOpacity: 0.05,
-    weight: 1,
-    dashArray: '5,5'
+    color: '#000091',
+    fillColor: '#000091',
+    fillOpacity: 0.04,
+    weight: 1.5,
+    dashArray: '6,6'
   }).addTo(map);
 
   const planesToShow = state.militaryOnly ? planes.filter(p => p.military) : planes;
@@ -706,13 +1139,13 @@ function renderMarkers(planes, sats) {
       icon: L.divIcon({
         className: 'plane-marker',
         html: `<div class="plane-dot ${p.military ? 'mil' : ''}" style="background:${color};color:${color}"></div>`,
-        iconSize: [8, 8],
-        iconAnchor: [4, 4]
+        iconSize: [10, 10],
+        iconAnchor: [5, 5]
       })
     }).addTo(map);
 
     marker.bindPopup(`
-      <b>${p.callsign}</b>${p.military ? ' ✈️' : ''}<br>
+      <b>${p.callsign}${p.military ? ' 🎖️' : ''}</b>
       ICAO24 : ${p.icao24}<br>
       Altitude : ${p.altFt.toLocaleString()} ft<br>
       Vitesse : ${p.velKmh || '—'} km/h<br>
@@ -733,13 +1166,13 @@ function renderMarkers(planes, sats) {
         icon: L.divIcon({
           className: 'sat-marker',
           html: `<div class="sat-dot" style="background:${color};color:${color}"></div>`,
-          iconSize: [8, 8],
-          iconAnchor: [4, 4]
+          iconSize: [10, 10],
+          iconAnchor: [5, 5]
         })
       }).addTo(map);
 
       marker.bindPopup(`
-        <b>${s.name}</b><br>
+        <b>${s.name}</b>
         NORAD : ${s.norad}<br>
         Altitude : ${s.alt.toFixed(0)} km<br>
         Distance : ${s.dist.toFixed(1)} km<br>
@@ -753,14 +1186,14 @@ function renderMarkers(planes, sats) {
 }
 
 // ============================================================
-// Rendu listes
+// RENDU LISTES
 // ============================================================
 function renderPlanesList(planes) {
   const el = document.getElementById("planes-list");
   const filtered = state.militaryOnly ? planes.filter(p => p.military) : planes;
   const items = filtered.slice(0, CONFIG.maxListItems);
   if (items.length === 0) {
-    el.innerHTML = '<div class="loading">Aucun avion dans la zone</div>';
+    el.innerHTML = '<div class="loading">Aucun contact aérien dans la zone</div>';
     return;
   }
   el.innerHTML = items.map(p => `
@@ -808,7 +1241,7 @@ function renderSatsList(sats) {
 }
 
 // ============================================================
-// Refresh global
+// REFRESH GLOBAL
 // ============================================================
 async function refresh() {
   const utc = formatUTC();
@@ -839,7 +1272,7 @@ async function refresh() {
 }
 
 // ============================================================
-// Countdown + auto-refresh
+// COUNTDOWN
 // ============================================================
 function startCountdown() {
   state.countdown = CONFIG.refreshInterval;
@@ -854,7 +1287,7 @@ function startCountdown() {
 }
 
 // ============================================================
-// Événements
+// ÉVÉNEMENTS
 // ============================================================
 document.getElementById("zone-select").addEventListener("change", (e) => {
   const [lat, lon, name] = e.target.value.split(",");
@@ -889,8 +1322,9 @@ document.getElementById("btn-toggle-sats").addEventListener("click", (e) => {
 });
 
 // ============================================================
-// Init
+// INIT
 // ============================================================
+document.getElementById("copyrightYear").textContent = new Date().getFullYear();
 map.setView([state.zone.lat, state.zone.lon], 7);
 refresh();
 startCountdown();
