@@ -569,7 +569,7 @@ body {
       <em>Liberté</em>
       <em>Égalité</em>
       <em>Fraternité</em>
-      <div class="ref-legale">Système TACTICAL-ORBIT · v3.2 · NORAD 25544</div>
+      <div class="ref-legale">Système TACTICAL-ORBIT · v3.3 · NORAD 25544</div>
     </div>
   </div>
 </div>
@@ -644,7 +644,7 @@ body {
     </div>
     <div class="stat">
       <div class="stat-label">Prochaine actualisation</div>
-      <div class="stat-value utc"><span id="countdown">30</span>s</div>
+      <div class="stat-value utc"><span id="countdown">60</span>s</div>
     </div>
   </div>
 
@@ -698,7 +698,7 @@ body {
   <div>République Française — Ministère des Armées</div>
   <div class="mention-legale">
     Cellule de veille stratégique · Surveillance aérienne ADS-B et orbitale SGP4<br>
-    Sources : adsb.lol · adsb.fi · airplanes.live · CelesTrak · OpenStreetMap<br>
+    Sources : adsb.lol · adsb.fi · airplanes.live · CelesTrak OMM · OpenStreetMap<br>
     Traitement : Cloudflare Worker · satellite.js · Leaflet
   </div>
   <div class="copyright-footer">
@@ -710,7 +710,7 @@ body {
 'use strict';
 
 const CONFIG = {
-  refreshInterval: 60,        // 60s pour éviter les 429
+  refreshInterval: 60,
   radiusNm: 250,
   minElevation: 5,
   maxListItems: 30,
@@ -808,6 +808,74 @@ function satColor(s) {
   return "#3fb950";
 }
 
+// ============================================================
+// CONVERSION OMM → TLE
+// Le catalogue CelesTrak JSON est au format OMM (paramètres Kepler)
+// satellite.js a besoin des lignes TLE brutes → on les reconstruit
+// ============================================================
+function ommToTle(sat) {
+  try {
+    const norad = String(sat.NORAD_CAT_ID).padStart(5, '0');
+    const classification = sat.CLASSIFICATION_TYPE || 'U';
+    const intlDesig = (sat.OBJECT_ID || '').replace(/[^A-Z0-9]/g, '').padEnd(8, ' ').slice(0, 8);
+
+    // Epoch : YYYY-MM-DDTHH:MM:SS → YYDDD.DDDDDDDD
+    const epochDate = new Date(sat.EPOCH + 'Z');
+    if (isNaN(epochDate.getTime())) return null;
+
+    const year = epochDate.getUTCFullYear() % 100;
+    const yearStr = String(year).padStart(2, '0');
+    const startOfYear = new Date(Date.UTC(epochDate.getUTCFullYear(), 0, 1));
+    const dayOfYear = (epochDate - startOfYear) / 86400000 + 1;
+    const dayStr = dayOfYear.toFixed(8).padStart(12, '0');
+    const epoch = yearStr + dayStr;
+
+    // Mean motion dot (format +.NNNNNNNN)
+    const mmDotRaw = sat.MEAN_MOTION_DOT || 0;
+    const mmDotSign = mmDotRaw >= 0 ? '+' : '-';
+    const mmDotAbs = Math.abs(mmDotRaw).toFixed(8).slice(2); // enlever "0."
+    const mmDot = `${mmDotSign}.${mmDotAbs}`;
+
+    // Bstar (format scientifique NN-N)
+    const bstarRaw = sat.BSTAR || 0;
+    let bstar = ' 00000-0';
+    if (bstarRaw !== 0) {
+      const sign = bstarRaw >= 0 ? ' ' : '-';
+      const exp = Math.floor(Math.log10(Math.abs(bstarRaw)));
+      const mant = Math.abs(bstarRaw) / Math.pow(10, exp);
+      const mantStr = (mant * 100000).toFixed(0).padStart(5, '0').slice(0, 5);
+      const expSign = exp >= 0 ? '+' : '-';
+      const expStr = String(Math.abs(exp)).padStart(1, '0');
+      bstar = `${sign}${mantStr}${expSign}${expStr}`;
+    }
+
+    // Ligne 1 (69 chars)
+    const line1 = `1 ${norad}${classification} ${intlDesig} ${epoch} ${mmDot} ${bstar} 0  999`;
+
+    // Ligne 2 (69 chars)
+    const inc = sat.INCLINATION.toFixed(4).padStart(8, ' ');
+    const raan = sat.RA_OF_ASC_NODE.toFixed(4).padStart(8, ' ');
+    const ecc = String(sat.ECCENTRICITY).replace('0.', '').padStart(7, '0').slice(0, 7);
+    const argp = sat.ARG_OF_PERICENTER.toFixed(4).padStart(8, ' ');
+    const ma = sat.MEAN_ANOMALY.toFixed(4).padStart(8, ' ');
+    const mm = sat.MEAN_MOTION.toFixed(8).padStart(11, ' ');
+    const rev = String(sat.REV_AT_EPOCH || 0).padStart(5, ' ');
+
+    const line2 = `2 ${norad} ${inc} ${raoStr(raan)} ${ecc} ${argp} ${ma} ${mm}${rev}`;
+    // Simplification : on reconstruit sans checksum (satellite.js n'en a pas besoin)
+    const line2Simple = `2 ${norad} ${inc} ${raan} ${ecc} ${argp} ${ma} ${mm}${rev}`;
+
+    return { line1: line1.padEnd(69, ' ').slice(0, 69), line2: line2Simple.padEnd(69, ' ').slice(0, 69) };
+  } catch (e) {
+    return null;
+  }
+}
+
+function raoStr(s) { return s; } // helper no-op
+
+// ============================================================
+// FETCH WORKER
+// ============================================================
 async function fetchViaWorker(targetUrl, timeoutMs = 20000, maxRetries = 2) {
   const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
 
@@ -820,7 +888,6 @@ async function fetchViaWorker(targetUrl, timeoutMs = 20000, maxRetries = 2) {
       clearTimeout(timeout);
 
       const source = res.headers.get('X-Source');
-      const cache = res.headers.get('X-Cache');
       if (source) state.currentSource = source;
 
       if (res.status === 429 || res.status === 502) {
@@ -836,9 +903,7 @@ async function fetchViaWorker(targetUrl, timeoutMs = 20000, maxRetries = 2) {
       try { return JSON.parse(text); } catch { return text; }
     } catch (e) {
       clearTimeout(timeout);
-      if (attempt === maxRetries - 1) {
-        throw new Error(`Worker: ${e.message}`);
-      }
+      if (attempt === maxRetries - 1) throw new Error(`Worker: ${e.message}`);
       const wait = Math.pow(2, attempt) * 5000;
       console.warn(`⚠️ Erreur (${e.message}), retry dans ${wait/1000}s…`);
       await new Promise(r => setTimeout(r, wait));
@@ -847,15 +912,17 @@ async function fetchViaWorker(targetUrl, timeoutMs = 20000, maxRetries = 2) {
   throw new Error('Worker: retries épuisés');
 }
 
+// ============================================================
+// AVIONS
+// ============================================================
 async function fetchPlanes() {
   const { lat, lon } = state.zone;
   const radius = CONFIG.radiusNm;
   const targetUrl = `https://api.adsb.lol/v2/point/${lat}/${lon}/${radius}`;
 
   try {
-    console.log(`📡 ADS-B via Worker (fallback multi-sources)…`);
+    console.log(`📡 ADS-B via Worker…`);
     const data = await fetchViaWorker(targetUrl, 20000, 2);
-
     const ac = data.ac || [];
     if (!Array.isArray(ac)) throw new Error('Format invalide');
 
@@ -889,36 +956,26 @@ async function fetchPlanes() {
   }
 }
 
+// ============================================================
+// CATALOGUE SATELLITES — conversion OMM → TLE
+// ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
 
   let catalog = null;
   let source = '—';
 
-  // 1. Catalogue local d'abord
+  // 1. Essayer le catalogue local
   try {
     console.log('📡 Chargement catalogue local…');
     const res = await fetch('data/all_active.json');
     if (res.ok) {
       catalog = await res.json();
       source = 'local';
-      console.log(`✅ Catalogue local chargé`);
+      console.log(`✅ Catalogue local chargé (${catalog.length} entrées)`);
     }
   } catch (e) {
     console.warn('Catalogue local indisponible');
-  }
-
-  // 2. Fallback Worker
-  if (!catalog || !Array.isArray(catalog)) {
-    const celestrakUrl = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json";
-    try {
-      console.log('📡 Chargement catalogue CelesTrak via Worker…');
-      catalog = await fetchViaWorker(celestrakUrl, 30000, 2);
-      source = 'Worker';
-    } catch (e) {
-      console.error('Erreur catalogue:', e);
-      return;
-    }
   }
 
   if (!Array.isArray(catalog) || catalog.length === 0) {
@@ -928,31 +985,47 @@ async function loadSatelliteCatalog() {
 
   console.log(`📦 ${catalog.length} entrées (source: ${source})`);
 
-  // DEBUG
+  // Détecter le format : OMM ou TLE brut ?
   const first = catalog[0];
-  console.log('🔍 Clés du 1er satellite :', Object.keys(first).join(', '));
-  console.log('🔍 TLE_LINE1 =', JSON.stringify(first.TLE_LINE1));
-  console.log('🔍 TLE_LINE2 =', JSON.stringify(first.TLE_LINE2));
-  console.log('🔍 OBJECT_NAME =', JSON.stringify(first.OBJECT_NAME));
-  console.log('🔍 Premier objet complet =', JSON.stringify(first).slice(0, 500));
+  const hasTleLines = !!(first.TLE_LINE1 && first.TLE_LINE2);
+  const isOmm = !!(first.MEAN_MOTION && first.INCLINATION && first.EPOCH);
+
+  console.log(`🔍 Format détecté : ${hasTleLines ? 'TLE brut' : isOmm ? 'OMM' : 'INCONNU'}`);
 
   const satrecs = [];
-  let noTle = 0, badTle = 0, sgp4Error = 0;
+  let noTle = 0, badTle = 0, sgp4Error = 0, converted = 0;
 
   for (const sat of catalog) {
     try {
-      const l1 = sat.TLE_LINE1 || sat.tle_line1 || sat.line1 || sat.LINE1;
-      const l2 = sat.TLE_LINE2 || sat.tle_line2 || sat.line2 || sat.LINE2;
-      if (!l1 || !l2) { noTle++; continue; }
+      let l1, l2;
+
+      if (sat.TLE_LINE1 && sat.TLE_LINE2) {
+        // Format TLE brut
+        l1 = sat.TLE_LINE1;
+        l2 = sat.TLE_LINE2;
+      } else if (sat.MEAN_MOTION && sat.INCLINATION && sat.EPOCH) {
+        // Format OMM → convertir en TLE
+        const tle = ommToTle(sat);
+        if (!tle) { noTle++; continue; }
+        l1 = tle.line1;
+        l2 = tle.line2;
+        converted++;
+      } else {
+        noTle++;
+        continue;
+      }
+
       const l1s = String(l1).trim();
       const l2s = String(l2).trim();
+
       if (l1s.length < 60 || l2s.length < 60) { badTle++; continue; }
+
       const satrec = satellite.twoline2satrec(l1s, l2s);
       if (satrec && satrec.error === 0) {
         satrecs.push({
           satrec,
-          name: sat.OBJECT_NAME || sat.object_name || 'INCONNU',
-          norad: sat.NORAD_CAT_ID || sat.norad_cat_id || '?'
+          name: sat.OBJECT_NAME || 'INCONNU',
+          norad: sat.NORAD_CAT_ID || '?'
         });
       } else {
         sgp4Error++;
@@ -963,7 +1036,8 @@ async function loadSatelliteCatalog() {
   state.satrecs = satrecs;
   state.catalogLoaded = true;
   console.log(`✅ ${satrecs.length} satellites SGP4 chargés`);
-  console.log(`   ${noTle} sans TLE | ${badTle} TLE courts | ${sgp4Error} erreurs SGP4`);
+  if (converted > 0) console.log(`   ${converted} convertis OMM → TLE`);
+  console.log(`   ${noTle} sans données | ${badTle} TLE courts | ${sgp4Error} erreurs SGP4`);
 }
 
 function computeSatellites() {
