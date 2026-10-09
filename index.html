@@ -1,900 +1,440 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>🇫🇷 Cellule Orbitale · Suivi ISS + Avions + Satellites</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HOUTIS-FACOM — Ormuz | Radar Unifié</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
 
 <style>
-@font-face {
-    font-family: 'Nasalization';
-    src: url('https://cdn.jsdelivr.net/gh/justfont/nasalization@main/Nasalization-Rg.otf') format('opentype');
-    font-weight: 400; font-style: normal; font-display: swap;
-}
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-    font-family: 'Nasalization', 'Marianne', 'Segoe UI', system-ui, sans-serif;
-    background: #f6f6f6; color: #1e1e1e;
-    padding: 0 0 16px; min-height: 100vh;
-}
-.bandeau-etat {
-    background: #ffffff; border-bottom: 2px solid #000091;
-    position: relative; margin-bottom: 20px;
-}
-.bandeau-etat::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-    background: linear-gradient(to right, #000091 0 33.33%, #fff 33.33% 66.66%, #E1000F 66.66% 100%);
-}
-.bandeau-etat-content {
-    max-width: 1400px; margin: 0 auto;
-    display: flex; align-items: center; gap: 16px;
-    padding: 14px 20px;
-}
-.bloc-marianne {
-    display: flex; align-items: center; gap: 12px;
-    padding: 8px 16px; background: #fff;
-    border-left: 4px solid #000091; border-right: 4px solid #E1000F;
-    flex-shrink: 0;
-}
-.marianne-sceau {
-    width: 52px; height: 52px; border-radius: 50%;
-    background: radial-gradient(circle at 30% 30%, #1212ff, #000091);
-    color: #fff; display: flex; align-items: center; justify-content: center;
-    font-family: 'Nasalization', sans-serif;
-    font-weight: 800; font-size: 16px;
-    border: 3px solid #fff;
-    box-shadow: 0 0 0 2px #000091, 0 4px 12px rgba(0,0,145,.25);
-    letter-spacing: .5px; position: relative;
-}
-.marianne-sceau::after {
-    content: ''; position: absolute; inset: -6px; border-radius: 50%;
-    border: 1px dashed rgba(0,0,145,.3);
-}
-.bloc-marque-txt { font-size: 11px; color: #3a3a3a; line-height: 1.4; }
-.bloc-marque-txt .republique {
-    display: block; font-family: 'Nasalization', sans-serif;
-    font-weight: 800; color: #000091;
-    font-size: 15px; letter-spacing: .5px; text-transform: uppercase;
-}
-.bloc-marque-txt .ministere {
-    display: block; font-size: 10px; color: #3a3a3a;
-    margin-top: 2px; letter-spacing: .3px;
-}
-.bloc-marque-txt .direction {
-    display: block; font-size: 9px; color: #929292;
-    margin-top: 2px; text-transform: uppercase; letter-spacing: 1px;
-}
-.bloc-devise {
-    margin-left: auto; text-align: right; font-size: 11px;
-    font-family: 'Nasalization', sans-serif;
-    color: #000091; letter-spacing: 3px; text-transform: uppercase;
-    font-weight: 700; line-height: 1.6;
-}
-.bloc-devise em { display: block; font-style: normal; }
-.bloc-devise .ref-legale {
-    font-family: monospace; font-size: 8px; color: #929292;
-    letter-spacing: .5px; margin-top: 4px; font-weight: 400;
-    text-transform: none;
-}
-.tricolore { position: fixed; top: 0; left: 0; right: 0; height: 4px; display: flex; z-index: 1000; }
-.tricolore span { flex: 1; }
-.tricolore .t-bleu { background: #000091; }
-.tricolore .t-blanc { background: #ffffff; }
-.tricolore .t-rouge { background: #E1000F; }
-
-.header {
-    text-align: center; padding: 25px 20px; margin-bottom: 20px;
-    background: linear-gradient(135deg, #ffffff, #f0f3ff);
-    border-radius: 16px; border: 1px solid #e5e5e5;
-    position: relative; overflow: hidden;
-    max-width: 1400px; margin-left: auto; margin-right: auto;
-}
-.header::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 6px;
-    background: linear-gradient(90deg, #000091 0%, #000091 33.33%, #ffffff 33.33%, #ffffff 66.66%, #E1000F 66.66%, #E1000F 100%);
-}
-.header h1 {
-    font-family: 'Nasalization', sans-serif;
-    font-size: 2rem; font-weight: 700; letter-spacing: 1.5px;
-    background: linear-gradient(90deg, #000091, #1212ff, #E1000F);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-.header p { color: #666; font-size: 0.95rem; margin-top: 6px; }
-
-.main-container { max-width: 1400px; margin: 0 auto; padding: 0 16px; }
-
-.search-section {
-    background: #ffffff; padding: 18px 20px; border-radius: 16px;
-    border: 1px solid #e5e5e5; margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,145,.04);
-}
-.status-bar {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 8px 4px 12px;
-    border-bottom: 1px solid #e5e5e5;
-    margin-bottom: 14px; flex-wrap: wrap; gap: 10px;
-}
-.status-bar .label {
-    color: #929292; font-size: 0.6rem; text-transform: uppercase;
-    letter-spacing: 1.5px; font-weight: 700;
-    font-family: 'Nasalization', sans-serif;
-}
-.status-bar .valeur {
-    font-family: monospace; color: #000091;
-    font-size: 0.95rem; font-weight: 700;
-}
-.status-bar .bloc-horloge { display: flex; flex-direction: column; gap: 2px; text-align: right; }
-.status-bar .bloc-horloge .valeur { color: #E1000F; font-size: 1rem; }
-
-.controls-zone {
-    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
-    margin-bottom: 14px; padding: 10px 0;
-    border-bottom: 1px solid #e5e5e5;
-}
-.controls-zone label {
-    color: #929292; font-size: 0.6rem; text-transform: uppercase;
-    letter-spacing: 1.5px; font-weight: 700;
-    font-family: 'Nasalization', sans-serif;
-}
-.controls-zone select {
-    padding: 6px 10px; border-radius: 8px;
-    border: 1px solid #e5e5e5; background: #fff;
-    font-family: monospace; font-size: 0.75rem;
-    color: #000091; font-weight: 700;
-    cursor: pointer;
-}
-.controls-zone select:hover { border-color: #000091; }
-
-.terminal-frame {
-    background: #f6f6f6;
-    border: 2px solid #000091;
-    border-radius: 12px;
-    padding: 12px;
-    overflow-x: auto;
-    position: relative;
-}
-.terminal-frame::before {
-    content: ''; position: absolute; inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      rgba(0,0,145,0.03) 0px,
-      rgba(0,0,145,0.03) 1px,
-      transparent 1px,
-      transparent 3px
-    );
-    pointer-events: none;
-    border-radius: 10px;
-    z-index: 2;
-}
-#output {
-    font-family: monospace;
+  :root {
+    --bg: #0a0e14;
+    --bg-panel: #11161f;
+    --border: #1f2937;
+    --text: #c9d1d9;
+    --text-dim: #6e7681;
+    --green: #3fb950;
+    --amber: #d29922;
+    --red: #f85149;
+    --cyan: #58a6ff;
+    --gold: #e3b341;
+    --magenta: #bc8cff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .header {
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .header h1 {
+    font-size: 16px;
+    color: var(--gold);
+    letter-spacing: 2px;
+    font-weight: 600;
+  }
+  .header .sub {
+    color: var(--text-dim);
     font-size: 11px;
-    line-height: 1.05;
-    white-space: pre;
-    color: #1e1e1e;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+  .stats { display: flex; gap: 24px; font-size: 12px; }
+  .stat { display: flex; flex-direction: column; align-items: flex-end; }
+  .stat-label {
+    color: var(--text-dim);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .stat-value { color: var(--cyan); font-size: 18px; font-weight: 600; }
+  .stat-value.mil { color: var(--red); }
+  .stat-value.sat { color: var(--gold); }
+  .controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .controls select, .controls button {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  .controls select:hover, .controls button:hover { border-color: var(--cyan); }
+  .controls button.active {
+    background: var(--cyan);
+    color: var(--bg);
+    font-weight: 600;
+  }
+  .map-container {
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    margin-bottom: 16px;
     position: relative;
-    z-index: 1;
-}
-#output .line { white-space: pre; }
-.logo    { color: #000091; font-weight: 700; }
-.stars   { color: #E1000F; }
-.land    { color: #1212ff; }
-.land-alt{ color: #6b6bff; }
-.ocean   { color: #f6f6f6; }
-.paris   { color: #E1000F; font-weight: 700; }
-.iss     { color: #16a34a; font-weight: 700; }
-.track   { color: #65a30d; }
-.border  { color: #929292; }
-.footer  { color: #666; margin-top: 6px; font-size: 11px; }
-.legend  { color: #000091; font-weight: 700; }
-.plane   { color: #d97706; font-weight: 700; }
-.plane-mil { color: #E1000F; font-weight: 700; }
-.plane-high { color: #eab308; font-weight: 700; }
-.sat-leo { color: #16a34a; font-weight: 700; }
-.sat-meo { color: #eab308; font-weight: 700; }
-.sat-geo { color: #E1000F; font-weight: 700; }
-.obs     { color: #1212ff; font-weight: 700; }
+  }
+  #map {
+    width: 100%;
+    height: 600px;
+    background: #0a0e14;
+  }
+  .map-overlay {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(17, 22, 31, 0.9);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    font-size: 11px;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  .map-overlay .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 4px;
+  }
+  .map-overlay .label { color: var(--text-dim); }
+  .map-overlay .value { color: var(--cyan); font-weight: 600; }
+  .map-overlay .value.mil { color: var(--red); }
+  .map-overlay .value.sat { color: var(--gold); }
 
-.stats-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 8px; margin-top: 14px;
-}
-.stat-card {
-    background: #ffffff; padding: 10px 14px; border-radius: 10px;
-    border: 1px solid #e5e5e5; transition: all 0.3s;
-    box-shadow: 0 1px 3px rgba(0,0,145,.03);
-    border-left: 4px solid #000091;
-}
-.stat-card:hover { border-color: #000091; box-shadow: 0 4px 12px rgba(0,0,145,.08); }
-.stat-card .label {
-    color: #929292; font-size: 0.55rem; text-transform: uppercase;
-    font-family: 'Nasalization', sans-serif;
-    letter-spacing: 0.5px; font-weight: 700;
-}
-.stat-card .value {
-    font-size: 0.95rem; font-weight: 700; margin-top: 3px;
-    font-family: monospace; word-break: break-all; color: #1e1e1e;
-}
-.stat-card .value.bleu { color: #000091; }
-.stat-card .value.rouge { color: #E1000F; }
-.stat-card .value.vert { color: #16a34a; }
-.stat-card .value.orange { color: #d97706; }
-.stat-card .value.jaune { color: #eab308; }
+  .leaflet-container {
+    background: #0a0e14 !important;
+    font-family: inherit !important;
+  }
+  .leaflet-tile {
+    filter: brightness(0.6) contrast(1.2) hue-rotate(180deg) invert(1);
+  }
+  .leaflet-control-attribution {
+    background: rgba(10, 14, 20, 0.8) !important;
+    color: var(--text-dim) !important;
+    font-size: 10px !important;
+  }
+  .leaflet-control-attribution a {
+    color: var(--cyan) !important;
+  }
+  .leaflet-popup-content-wrapper {
+    background: var(--bg-panel) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border);
+    border-radius: 0;
+  }
+  .leaflet-popup-tip { background: var(--bg-panel) !important; }
+  .leaflet-popup-content {
+    font-family: inherit !important;
+    font-size: 11px !important;
+    margin: 8px 12px !important;
+  }
+  .leaflet-popup-content b { color: var(--gold); }
 
-.section-title {
-    color: #1e1e1e; font-size: 1rem; font-weight: 700;
-    font-family: 'Nasalization', sans-serif;
-    margin: 16px 0 8px 0; padding-bottom: 5px;
-    border-bottom: 2px solid #e5e5e5;
-    border-image: linear-gradient(90deg, #000091, #ffffff, #E1000F) 1;
-    letter-spacing: 0.5px;
-}
-.section-title .emoji { margin-right: 8px; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+    padding: 16px;
+  }
+  .panel-title {
+    color: var(--gold);
+    font-size: 12px;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-title .count { color: var(--cyan); font-size: 14px; }
+  .list { max-height: 400px; overflow-y: auto; }
+  .list-item {
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    gap: 12px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #161b22;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .list-item:hover { background: #161b22; }
+  .list-item .cs {
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .list-item .cs.mil { color: var(--red); font-weight: 600; }
+  .list-item .num { color: var(--text-dim); text-align: right; min-width: 50px; }
+  .list-item .num.highlight { color: var(--cyan); }
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .footer {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 16px;
+    border-top: 1px solid var(--border);
+    margin-top: 16px;
+  }
+  .footer a { color: var(--cyan); text-decoration: none; }
+  .loading { color: var(--amber); font-size: 11px; text-align: center; padding: 8px; }
+  .error { color: var(--red); font-size: 11px; text-align: center; padding: 8px; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
 
-#controls { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 14px; }
-button {
-    padding: 8px 16px; border-radius: 20px;
-    border: 1px solid #e5e5e5;
-    background: #ffffff; color: #666;
-    font-family: 'Nasalization', sans-serif;
-    font-size: 0.75rem; font-weight: 600;
-    cursor: pointer; transition: all 0.2s;
-    letter-spacing: 0.5px;
-}
-button:hover { border-color: #000091; color: #000091; background: #e3e3fd; }
-button.btn-primary { background: #000091; color: #fff; border-color: #000091; }
-button.btn-primary:hover { background: #E1000F; border-color: #E1000F; color: #fff; }
-button.btn-clear { border-color: #E1000F; color: #E1000F; }
-button.btn-clear:hover { background: #ffe9e9; }
-button.active { background: #E1000F; color: #fff; border-color: #E1000F; }
-
-#status {
-    margin-top: 12px; text-align: center;
-    color: #000091; font-family: 'Nasalization', sans-serif;
-    font-size: 0.75rem; letter-spacing: 1.5px;
-    text-transform: uppercase; font-weight: 700;
-    min-height: 1.2em; padding: 8px;
-}
-
-.footer-officiel {
-    background: #fff; border-top: 2px solid #000091;
-    padding: 24px 20px 16px; text-align: center;
-    color: #3a3a3a; font-size: 11px; margin-top: 40px;
-}
-.footer-officiel .devise-footer {
-    font-family: 'Nasalization', sans-serif;
-    font-size: 13px; color: #000091; letter-spacing: 4px;
-    text-transform: uppercase; font-weight: 700; margin-bottom: 8px;
-}
-.footer-officiel .mention-legale {
-    color: #929292; font-size: 9px; font-family: monospace;
-    letter-spacing: .5px; margin-top: 8px; line-height: 1.6;
-}
-.footer-officiel .copyright-footer {
-    margin-top: 10px; font-family: monospace;
-    font-size: 10px; color: #929292;
-}
-.footer-officiel .copyright-footer .sig {
-    font-family: 'Nasalization', sans-serif;
-    font-weight: 700; letter-spacing: 2px;
-    background: linear-gradient(90deg, #000091, #E1000F);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-@media (max-width: 700px) {
-    .bandeau-etat-content { flex-direction: column; gap: 10px; padding: 10px 12px; }
-    .bloc-devise { margin-left: 0; text-align: center; }
-    .bloc-devise em { display: inline; margin: 0 4px; }
-    .header h1 { font-size: 1.3rem; }
-    .stats-grid { grid-template-columns: 1fr; }
-    #controls button { width: 100%; }
-}
+  .plane-marker, .sat-marker {
+    background: transparent;
+    border: none;
+  }
+  .plane-dot, .sat-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .plane-dot.mil { animation: pulse 1.5s infinite; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.7; }
+  }
+  .observer-marker {
+    background: transparent;
+    border: none;
+  }
+  .observer-dot {
+    width: 12px;
+    height: 12px;
+    background: var(--gold);
+    border: 2px solid var(--bg);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--gold);
+  }
 </style>
 </head>
 <body>
 
-<div class="bandeau-etat">
-  <div class="bandeau-etat-content">
-    <div class="bloc-marianne">
-      <div class="marianne-sceau">RF</div>
-      <div class="bloc-marque-txt">
-        <span class="republique">République Française</span>
-        <span class="ministere">Ministère de l'Enseignement supérieur<br>et de la Recherche</span>
-        <span class="direction">Cellule orbitale · Suivi ISS + Avions + Satellites</span>
-      </div>
+<div class="header">
+  <div>
+    <h1>🛰️ HOUTIS-FACOM — DÉTROIT D'ORMUZ</h1>
+    <div class="sub">SURVEILLANCE AVIONS (ADS-B) + SATELLITES (SGP4) // GOLFE PERSIQUE</div>
+  </div>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Zone</div>
+      <div class="stat-value" id="stat-zone">—</div>
     </div>
-    <div class="bloc-devise">
-      <em>Liberté</em>
-      <em>Égalité</em>
-      <em>Fraternité</em>
-      <div class="ref-legale">Monitor Orbital v2.4 · NORAD 25544 · TLE + ADS-B + SGP4</div>
+    <div class="stat">
+      <div class="stat-label">Avions</div>
+      <div class="stat-value" id="stat-planes">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Militaires</div>
+      <div class="stat-value mil" id="stat-mil">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Satellites</div>
+      <div class="stat-value sat" id="stat-sats">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">UTC</div>
+      <div class="stat-value" id="stat-utc">—</div>
     </div>
   </div>
 </div>
 
-<div class="tricolore">
-    <span class="t-bleu"></span>
-    <span class="t-blanc"></span>
-    <span class="t-rouge"></span>
+<div class="controls">
+  <label style="color: var(--text-dim);">Zone :</label>
+  <select id="zone-select">
+    <option value="26.57,56.25,Détroit d'Ormuz">★ Détroit d'Ormuz</option>
+    <option value="26.50,56.20,Ormuz (sud)">Ormuz (sud)</option>
+    <option value="26.20,56.25,Bande d'Ormuz (nord)">Bande d'Ormuz (nord)</option>
+    <option value="27.20,56.30,Bandar Abbas (Iran)">Bandar Abbas (Iran)</option>
+    <option value="26.50,55.00,Île de Qeshm (Iran)">Île de Qeshm (Iran)</option>
+    <option value="25.60,57.00,Golfe d'Oman">Golfe d'Oman</option>
+    <option value="25.10,56.30,Fujairah (EAU)">Fujairah (EAU)</option>
+    <option value="25.25,55.36,Dubaï (EAU)">Dubaï (EAU)</option>
+    <option value="24.43,54.65,Abu Dhabi (EAU)">Abu Dhabi (EAU)</option>
+    <option value="25.27,51.60,Doha (Qatar)">Doha (Qatar)</option>
+    <option value="26.07,50.55,Bahreïn">Bahreïn</option>
+    <option value="29.22,47.98,Koweït">Koweït</option>
+    <option value="23.59,58.41,Mascate (Oman)">Mascate (Oman)</option>
+    <option value="24.71,46.67,Riyad (Arabie saoudite)">Riyad (Arabie saoudite)</option>
+    <option value="35.69,51.39,Téhéran (Iran)">Téhéran (Iran)</option>
+    <option value="33.31,44.36,Bagdad (Irak)">Bagdad (Irak)</option>
+    <option value="15.37,44.19,Sanaa (Yémen)">Sanaa (Yémen)</option>
+    <option value="30.04,31.24,Le Caire (Égypte)">Le Caire (Égypte)</option>
+  </select>
+
+  <label style="color: var(--text-dim);">Filtre satellites :</label>
+  <select id="sat-filter">
+    <option value="all">Tous</option>
+    <option value="leo">LEO</option>
+    <option value="meo">MEO</option>
+    <option value="geo">GEO</option>
+    <option value="starlink">Starlink</option>
+    <option value="oneweb">OneWeb</option>
+    <option value="nav">Navigation</option>
+    <option value="stations">Stations</option>
+  </select>
+
+  <button id="btn-refresh">⟳ RAFRAÎCHIR</button>
+  <button id="btn-toggle-mil">MILITAIRE UNIQUEMENT</button>
+  <button id="btn-toggle-sats">SATELLITES ON/OFF</button>
+  <span style="color: var(--text-dim); font-size: 11px; margin-left: auto;">
+    Source : <span id="source-name" style="color: var(--cyan);">—</span> · 
+    Auto-refresh : <span id="countdown">30</span>s
+  </span>
 </div>
 
-<div class="main-container">
-    <div class="header">
-        <h1>🛰️ Cellule orbitale — Suivi ISS + Avions + Satellites</h1>
-        <p>Carte de situation · Projection équirectangulaire · Temps réel · 🇫🇷</p>
-    </div>
-
-    <div class="search-section">
-        <div class="status-bar">
-            <div>
-                <div class="label">Source TLE ISS</div>
-                <div class="valeur" id="tle-source">—</div>
-            </div>
-            <div>
-                <div class="label">Zone ADS-B</div>
-                <div class="valeur" id="adsb-source">—</div>
-            </div>
-            <div>
-                <div class="label">Catalogue SGP4</div>
-                <div class="valeur" id="catalog-status">—</div>
-            </div>
-            <div class="bloc-horloge">
-                <div class="label">Temps Universel Coordonné</div>
-                <div class="valeur" id="horloge-utc">--:--:-- UTC</div>
-            </div>
-        </div>
-
-        <div class="controls-zone">
-            <label>Zone observation :</label>
-            <select id="zone-select">
-                <option value="26.57,56.25,Détroit d'Ormuz">★ Détroit d'Ormuz</option>
-                <option value="25.25,55.36,Dubaï">Dubaï</option>
-                <option value="23.59,58.41,Mascate">Mascate</option>
-                <option value="25.27,51.60,Doha">Doha</option>
-                <option value="24.71,46.67,Riyad">Riyad</option>
-                <option value="48.85,2.35,Paris">Paris</option>
-                <option value="5.16,-52.65,Kourou">Kourou</option>
-            </select>
-            <label>Rayon :</label>
-            <select id="radius-select">
-                <option value="100">100 nm</option>
-                <option value="150">150 nm</option>
-                <option value="200">200 nm</option>
-                <option value="250" selected>250 nm (max)</option>
-            </select>
-            <label>Satellites :</label>
-            <select id="sat-filter">
-                <option value="all">Tous</option>
-                <option value="leo">LEO</option>
-                <option value="meo">MEO</option>
-                <option value="geo">GEO</option>
-                <option value="starlink">Starlink</option>
-                <option value="nav">Navigation</option>
-                <option value="stations">Stations</option>
-            </select>
-        </div>
-
-        <div class="terminal-frame">
-            <div id="output"></div>
-        </div>
-
-        <div class="section-title"><span class="emoji">📊</span> Télémesures orbitales — ISS</div>
-        <div class="stats-grid">
-            <div class="stat-card"><div class="label">Latitude ISS</div><div class="value vert" id="tm-lat">—</div></div>
-            <div class="stat-card"><div class="label">Longitude ISS</div><div class="value vert" id="tm-lon">—</div></div>
-            <div class="stat-card"><div class="label">Altitude ISS</div><div class="value bleu" id="tm-alt">—</div></div>
-            <div class="stat-card"><div class="label">Vitesse orbitale</div><div class="value bleu" id="tm-vit">—</div></div>
-            <div class="stat-card"><div class="label">Cap (azimut)</div><div class="value rouge" id="tm-cap">—</div></div>
-            <div class="stat-card"><div class="label">Période orbitale</div><div class="value rouge" id="tm-periode">—</div></div>
-        </div>
-
-        <div class="section-title"><span class="emoji">✈️</span> Trafic aérien ADS-B</div>
-        <div class="stats-grid">
-            <div class="stat-card"><div class="label">Avions détectés</div><div class="value orange" id="tm-planes">0</div></div>
-            <div class="stat-card"><div class="label">Dont militaires</div><div class="value rouge" id="tm-mil">0</div></div>
-            <div class="stat-card"><div class="label">Plus proche</div><div class="value orange" id="tm-closest">—</div></div>
-            <div class="stat-card"><div class="label">Distance min</div><div class="value orange" id="tm-closest-dist">—</div></div>
-        </div>
-
-        <div class="section-title"><span class="emoji">🛰️</span> Constellation satellite</div>
-        <div class="stats-grid">
-            <div class="stat-card"><div class="label">Satellites visibles</div><div class="value jaune" id="tm-sats">0</div></div>
-            <div class="stat-card"><div class="label">LEO / MEO / GEO</div><div class="value jaune" id="tm-sats-split">—</div></div>
-            <div class="stat-card"><div class="label">Élévation max</div><div class="value jaune" id="tm-sats-elmax">—</div></div>
-            <div class="stat-card"><div class="label">Catalogue SGP4</div><div class="value bleu" id="tm-sats-catalog">—</div></div>
-        </div>
-
-        <div id="controls">
-            <button class="btn-primary" id="btn-toggle">⏸ Pause</button>
-            <button id="btn-refresh">🔄 Recharger TLE + ADS-B</button>
-            <button class="btn-clear" id="btn-clear">🧹 Effacer trace</button>
-            <button id="btn-toggle-planes">✈️ Avions ON/OFF</button>
-            <button id="btn-toggle-sats">🛰️ Satellites ON/OFF</button>
-            <button id="btn-mil-only">🎖️ Militaire uniquement</button>
-        </div>
-    </div>
-
-    <div id="status">Initialisation des systèmes…</div>
+<div class="map-container">
+  <div id="map"></div>
+  <div class="map-overlay">
+    <div class="row"><span class="label">Zone</span><span class="value" id="ov-zone">—</span></div>
+    <div class="row"><span class="label">Avions</span><span class="value" id="ov-planes">0</span></div>
+    <div class="row"><span class="label">Militaires</span><span class="value mil" id="ov-mil">0</span></div>
+    <div class="row"><span class="label">Satellites</span><span class="value sat" id="ov-sats">0</span></div>
+    <div class="row"><span class="label">UTC</span><span class="value" id="ov-utc">—</span></div>
+  </div>
 </div>
 
-<footer class="footer-officiel">
-  <div class="devise-footer">Liberté · Égalité · Fraternité</div>
-  <div>République Française — Ministère de l'Enseignement supérieur et de la Recherche</div>
-  <div class="mention-legale">
-    Cellule orbitale — Suivi ISS temps réel via TLE public<br>
-    Projection équirectangulaire · Natural Earth 110m · satellite.js · NORAD 25544 · adsb.lol · SGP4 · Refresh 30s
+<div class="grid">
+  <div class="panel">
+    <div class="panel-title">
+      <span>✈️ AVIONS</span>
+      <span class="count" id="planes-count">0</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Basse</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--cyan)"></div> Moyenne</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div> Haute</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Militaire</div>
+    </div>
+    <div class="list" id="planes-list"></div>
   </div>
-  <div class="copyright-footer">
-    © <span id="copyrightYear">2025</span> · <span class="sig">CELLULE ORBITALE</span> · gunout · Tous droits réservés
+
+  <div class="panel">
+    <div class="panel-title">
+      <span>🛰️ SATELLITES</span>
+      <span class="count" id="sats-count">0</span>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> LEO bas</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div> LEO haut</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--gold)"></div> MEO</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> GEO</div>
+    </div>
+    <div class="list" id="sats-list"></div>
   </div>
-</footer>
+</div>
+
+<div class="footer">
+  SOURCE : adsb.lol / adsb.fi via Cloudflare Worker + CelesTrak (satellites) // 
+  <a href="https://github.com/gunout/houtis-facom" target="_blank">github.com/gunout/houtis-facom</a> // 
+  SGP4 via satellite.js // Carte Leaflet + OpenStreetMap
+</div>
 
 <script>
-'use strict';
-
-/* ============================================================
- *  CONFIG
- * ============================================================ */
-const COLS = 120;
-const ROWS = 50;
-const ISS_NORAD = 25544;
-const TRACK_MAX = 30;
-
-// Worker Cloudflare
-const CORS_PROXY = 'https://facom-proxy.gunout.workers.dev';
-
-// Fréquences de refresh (ajustées pour éviter 429)
-const ADSB_REFRESH_MS = 30000;   // 30 secondes
-const SATS_REFRESH_MS = 10000;   // 10 secondes
-
-const FALLBACK_TLE = {
-  name: 'ISS (ZARYA)',
-  line1: '1 25544U 98067A   24280.50000000  .00016717  00000-0  30777-3 0  9990',
-  line2: '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.49815389477874',
+// ============================================================
+// Configuration
+// ============================================================
+const CONFIG = {
+  refreshInterval: 30,
+  radiusNm: 250,
+  minElevation: 5,
+  maxListItems: 30,
+  // Worker Cloudflare
+  workerUrl: 'https://facom-proxy.gunout.workers.dev',
+  militaryPrefixes: [
+    "RCH","REACH","DUKE","MAGIC","HAWK","VIPER","TITAN","SPAR","EVAC",
+    "ASCOT","JAKE","HOMER","PYTHON","RRR","RFR","TARTAN","FAF","COTAM",
+    "CTM","GAF","GAM","IAM","CFC","CANFORCE","RAAF","RNZAF","AUSSIE",
+    "KIWI","SVA","UAE","KSA","RSF","BAHRAIN","QAF","KAF","THK","TURK",
+    "EGY","JOR","RAM","NATO","AWACS","SENTRY","TANKER","UAV","RQ","MQ",
+    "FORTE","GLOBAL"
+  ],
+  militaryIcaoPrefixes: [
+    "ae","43c","3f","38","44","48","4b","71","76","06","70","72","73","4d","45"
+  ]
 };
 
-const MARKERS = [
-  { name: 'Paris',  lon:   2.35, lat: 48.85, char: 'X', cls: 'paris' },
-  { name: 'Kourou', lon: -52.65, lat:  5.16, char: 'O', cls: 'paris' },
-];
-
-const MILITARY_PREFIXES = [
-  "RCH","REACH","DUKE","MAGIC","HAWK","VIPER","TITAN","SPAR","EVAC",
-  "ASCOT","JAKE","HOMER","PYTHON","RRR","RFR","TARTAN","FAF","COTAM",
-  "CTM","GAF","GAM","IAM","CFC","CANFORCE","RAAF","RNZAF","AUSSIE",
-  "KIWI","SVA","UAE","KSA","RSF","BAHRAIN","QAF","KAF","THK","TURK",
-  "EGY","JOR","RAM","NATO","AWACS","SENTRY","TANKER","UAV","RQ","MQ",
-  "FORTE","GLOBAL"
-];
-const MILITARY_ICAO_PREFIXES = [
-  "ae","43c","3f","38","44","48","4b","71","76","06","70","72","73","4d","45"
-];
-
-/* ============================================================
- *  ÉTAT GLOBAL
- * ============================================================ */
 const state = {
   zone: { lat: 26.57, lon: 56.25, name: "Détroit d'Ormuz" },
-  radiusNm: 250,
   planes: [],
   satellites: [],
   satrecs: [],
-  satFilter: 'all',
-  planesVisible: true,
-  satsVisible: true,
+  satFilter: "all",
   militaryOnly: false,
+  showSatellites: true,
+  countdown: CONFIG.refreshInterval,
+  planeMarkers: [],
+  satMarkers: [],
+  observerMarker: null,
   catalogLoaded: false,
-  paused: false,
-  issTrack: [],
-  lastPos: null,
-  baseGrid: null,
-  landFeatures: [],
-  lastUpdate: 0,
-  lastAdsBFetch: 0,
-  lastSatsCompute: 0,
-  adsbSource: '—',
-  adsbError: null,
-  cacheHits: 0,
-  cacheMiss: 0,
+  useAdsbFi: false,  // alternance
+  currentSource: '—'
 };
 
-/* ============================================================
- *  HORLOGE UTC
- * ============================================================ */
-function majHorloge() {
-  const now = new Date();
-  const hh = String(now.getUTCHours()).padStart(2, '0');
-  const mm = String(now.getUTCMinutes()).padStart(2, '0');
-  const ss = String(now.getUTCSeconds()).padStart(2, '0');
-  document.getElementById('horloge-utc').textContent = `${hh}:${mm}:${ss} UTC`;
-}
-setInterval(majHorloge, 1000);
-majHorloge();
+// ============================================================
+// Carte Leaflet
+// ============================================================
+const map = L.map('map', {
+  center: [state.zone.lat, state.zone.lon],
+  zoom: 6,
+  zoomControl: true,
+  attributionControl: true
+});
 
-/* ============================================================
- *  DMS
- * ============================================================ */
-function toDMS(value, posLabel, negLabel) {
-  const hemi = value >= 0 ? posLabel : negLabel;
-  const abs = Math.abs(value);
-  const d = Math.floor(abs);
-  const mFloat = (abs - d) * 60;
-  const m = Math.floor(mFloat);
-  const s = ((mFloat - m) * 60).toFixed(1);
-  return `${d}° ${String(m).padStart(2,'0')}' ${String(s).padStart(4,'0')}" ${hemi}`;
-}
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap',
+  maxZoom: 18
+}).addTo(map);
 
-/* ============================================================
- *  PROXY WORKER AVEC RETRY + BACKOFF (gestion 429)
- * ============================================================ */
-async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
-  const proxyUrl = `${CORS_PROXY}?url=${encodeURIComponent(targetUrl)}`;
+let coverageCircle = null;
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const res = await fetch(proxyUrl, { signal: controller.signal });
-      clearTimeout(timeout);
-
-      // Détection du cache
-      const cacheStatus = res.headers.get('X-Cache');
-      if (cacheStatus === 'HIT') state.cacheHits++;
-      else if (cacheStatus === 'MISS') state.cacheMiss++;
-
-      // 429 : trop de requêtes → backoff exponentiel
-      if (res.status === 429) {
-        const wait = Math.pow(2, attempt) * 3000;  // 3s, 6s, 12s
-        console.warn(`⏳ 429 reçu (tentative ${attempt + 1}/${maxRetries}), retry dans ${wait/1000}s…`);
-        await new Promise(r => setTimeout(r, wait));
-        continue;
-      }
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const text = await res.text();
-      try { return JSON.parse(text); } catch { return text; }
-    } catch (e) {
-      clearTimeout(timeout);
-      if (attempt === maxRetries - 1) {
-        throw new Error(`Worker (après ${maxRetries} tentatives): ${e.message}`);
-      }
-      // Backoff pour les autres erreurs aussi
-      const wait = Math.pow(2, attempt) * 2000;
-      console.warn(`⚠️ Erreur (${e.message}), retry dans ${wait/1000}s…`);
-      await new Promise(r => setTimeout(r, wait));
-    }
-  }
-
-  throw new Error('Worker: retries épuisés');
-}
-
-/* ============================================================
- *  GEOJSON NATURAL EARTH
- * ============================================================ */
-async function loadLand() {
-  const url = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson';
-  try {
-    const geo = await fetchViaWorker(url, 20000);
-    if (geo && Array.isArray(geo.features)) {
-      state.landFeatures = geo.features;
-      console.log(`✅ ${state.landFeatures.length} polygones chargés`);
-      return true;
-    }
-  } catch (e) {
-    console.warn(`❌ Échec GeoJSON:`, e.message);
-  }
-  return false;
-}
-
-/* ============================================================
- *  POINT-IN-POLYGON
- * ============================================================ */
-function pointInRing(lon, lat, ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0], yi = ring[i][1];
-    const xj = ring[j][0], yj = ring[j][1];
-    const intersect = ((yi > lat) !== (yj > lat)) &&
-      (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi);
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
-function pointInPolygon(lon, lat, polygon) {
-  if (!pointInRing(lon, lat, polygon[0])) return false;
-  for (let i = 1; i < polygon.length; i++) {
-    if (pointInRing(lon, lat, polygon[i])) return false;
-  }
-  return true;
-}
-function isLand(lon, lat) {
-  for (const f of state.landFeatures) {
-    const g = f.geometry;
-    if (!g) continue;
-    if (g.type === 'Polygon') {
-      if (pointInPolygon(lon, lat, g.coordinates)) return true;
-    } else if (g.type === 'MultiPolygon') {
-      for (const poly of g.coordinates) {
-        if (pointInPolygon(lon, lat, poly)) return true;
-      }
-    }
-  }
-  return false;
-}
-
-/* ============================================================
- *  GRILLE
- * ============================================================ */
-function buildGrid() {
-  const grid = [];
-  for (let i = 0; i < ROWS; i++) {
-    const lat = 90 - i * 180 / ROWS;
-    const row = [];
-    for (let j = 0; j < COLS; j++) {
-      const lon = -180 + j * 360 / COLS;
-      const land = isLand(lon, lat);
-      row.push({
-        char: land ? ((i + j) % 2 === 0 ? '•' : '·') : ' ',
-        cls:  land ? ((i + j) % 2 === 0 ? 'land' : 'land-alt') : 'ocean',
-      });
-    }
-    grid.push(row);
-  }
-  return grid;
-}
-function project(lon, lat) {
-  const i = Math.floor((90 - lat) / 180 * ROWS);
-  const j = Math.floor((lon + 180) / 360 * COLS);
-  if (i < 0 || i >= ROWS || j < 0 || j >= COLS) return null;
-  return { i, j };
-}
-
-/* ============================================================
- *  RENDU GRILLE
- * ============================================================ */
-function renderGrid(grid, issPos = null) {
-  const g = grid.map(row => row.map(c => ({ ...c })));
-
-  for (const m of MARKERS) {
-    const p = project(m.lon, m.lat);
-    if (p) { g[p.i][p.j].char = m.char; g[p.i][p.j].cls = m.cls; }
-  }
-
-  const obsP = project(state.zone.lon, state.zone.lat);
-  if (obsP) { g[obsP.i][obsP.j].char = '◎'; g[obsP.i][obsP.j].cls = 'obs'; }
-
-  for (const t of state.issTrack) {
-    const p = project(t.lon, t.lat);
-    if (p && (g[p.i][p.j].char === ' ' || g[p.i][p.j].char === '·' || g[p.i][p.j].char === '•')) {
-      g[p.i][p.j].char = '.';
-      g[p.i][p.j].cls = 'track';
-    }
-  }
-
-  if (state.satsVisible) {
-    for (const s of state.satellites) {
-      const p = project(s.lon, s.lat);
-      if (!p) continue;
-      if (g[p.i][p.j].char === ' ' || g[p.i][p.j].char === '·' || g[p.i][p.j].char === '•') {
-        let ch = 'o', cls = 'sat-leo';
-        if (s.alt >= 30000) { ch = '#'; cls = 'sat-geo'; }
-        else if (s.alt >= 2000) { ch = 'O'; cls = 'sat-meo'; }
-        else if (s.alt >= 500) { ch = 'o'; cls = 'sat-meo'; }
-        else { ch = '*'; cls = 'sat-leo'; }
-        g[p.i][p.j].char = ch;
-        g[p.i][p.j].cls = cls;
-      }
-    }
-  }
-
-  if (state.planesVisible) {
-    const planesToShow = state.militaryOnly
-      ? state.planes.filter(p => p.military)
-      : state.planes;
-    for (const p of planesToShow) {
-      const proj = project(p.lon, p.lat);
-      if (!proj) continue;
-      let ch = '✈', cls = 'plane';
-      if (p.military) { ch = '✈'; cls = 'plane-mil'; }
-      else if (p.altFt > 30000) { ch = '▲'; cls = 'plane-high'; }
-      g[proj.i][proj.j].char = ch;
-      g[proj.i][proj.j].cls = cls;
-    }
-  }
-
-  if (issPos) {
-    const p = project(issPos.lon, issPos.lat);
-    if (p) { g[p.i][p.j].char = '◉'; g[p.i][p.j].cls = 'iss'; }
-  }
-
-  const out = document.getElementById('output');
-  let html = '';
-  html += `<div class="line logo">   ███████ ███████  █████</div>`;
-  html += `<div class="line logo">   ██      ██      ██   ██</div>`;
-  html += `<div class="line logo">   █████   ███████ ███████</div>`;
-  html += `<div class="line logo">   ██           ██ ██   ██</div>`;
-  html += `<div class="line logo">   ███████ ███████ ██   ██</div>`;
-  html += `<div class="line stars">   ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★</div>`;
-  html += `<div class="line">&nbsp;</div>`;
-  html += `<div class="line border">+${'-'.repeat(COLS)}+</div>`;
-  for (let i = 0; i < ROWS; i++) {
-    let line = `<span class="border">|</span>`;
-    for (let j = 0; j < COLS; j++) {
-      const c = g[i][j];
-      const ch = c.char === ' ' ? '&nbsp;' : c.char;
-      line += `<span class="${c.cls}">${ch}</span>`;
-    }
-    line += `<span class="border">|</span>`;
-    html += `<div class="line">${line}</div>`;
-  }
-  html += `<div class="line border">+${'-'.repeat(COLS)}+</div>`;
-  html += `<div class="line footer">`;
-  html += `<span class="iss">◉</span> ISS  `;
-  html += `<span class="track">.</span> Trace  `;
-  html += `<span class="plane">✈</span> Avion  `;
-  html += `<span class="plane-mil">✈</span> Militaire  `;
-  html += `<span class="sat-leo">* o O #</span> Satellites  `;
-  html += `<span class="paris">X</span> Paris  `;
-  html += `<span class="paris">O</span> Kourou  `;
-  html += `<span class="obs">◎</span> Station`;
-  html += `</div>`;
-  out.innerHTML = html;
-}
-
-/* ============================================================
- *  TÉLÉMESURES ISS
- * ============================================================ */
-function renderTelemesures(pos) {
-  if (!pos) {
-    ['tm-lat','tm-lon','tm-alt','tm-vit','tm-cap','tm-periode'].forEach(id => {
-      document.getElementById(id).textContent = '—';
-    });
-    return;
-  }
-  document.getElementById('tm-lat').textContent = toDMS(pos.lat, 'N', 'S');
-  document.getElementById('tm-lon').textContent = toDMS(pos.lon, 'E', 'O');
-  document.getElementById('tm-alt').textContent = `${pos.alt.toFixed(1)} km`;
-  document.getElementById('tm-vit').textContent = `${pos.speed.toFixed(3)} km/s`;
-  const cap = ((pos.heading % 360) + 360) % 360;
-  document.getElementById('tm-cap').textContent = `${cap.toFixed(1)}°`;
-  document.getElementById('tm-periode').textContent = `${(pos.period).toFixed(1)} min`;
-}
-
-/* ============================================================
- *  TÉLÉMESURES AVIONS
- * ============================================================ */
-function renderTelemesuresPlanes(planes) {
-  const milCount = planes.filter(p => p.military).length;
-  document.getElementById('tm-planes').textContent = planes.length;
-  document.getElementById('tm-mil').textContent = milCount;
-
-  if (planes.length > 0) {
-    const closest = planes[0];
-    document.getElementById('tm-closest').textContent = closest.callsign;
-    document.getElementById('tm-closest-dist').textContent = `${closest.dist.toFixed(1)} km`;
-  } else {
-    document.getElementById('tm-closest').textContent = '—';
-    document.getElementById('tm-closest-dist').textContent = '—';
-  }
-}
-
-/* ============================================================
- *  TÉLÉMESURES SATELLITES
- * ============================================================ */
-function renderTelemesuresSats(sats) {
-  document.getElementById('tm-sats').textContent = sats.length;
-  const nLeo = sats.filter(s => s.alt < 2000).length;
-  const nMeo = sats.filter(s => s.alt >= 2000 && s.alt < 30000).length;
-  const nGeo = sats.filter(s => s.alt >= 30000).length;
-  document.getElementById('tm-sats-split').textContent = `${nLeo} / ${nMeo} / ${nGeo}`;
-
-  const elMax = sats.length > 0 ? Math.max(...sats.map(s => s.el)) : 0;
-  document.getElementById('tm-sats-elmax').textContent = `${elMax.toFixed(1)}°`;
-
-  document.getElementById('tm-sats-catalog').textContent = state.satrecs.length;
-}
-
-/* ============================================================
- *  TLE ISS
- * ============================================================ */
-let issSatrec = null;
-
-async function loadTLE() {
-  setStatus('🔄 Chargement du TLE ISS…');
-  issSatrec = null;
-  document.getElementById('tle-source').textContent = '…';
-
-  const sources = [
-    {
-      name: 'ivanstanojevic',
-      url: `https://tle.ivanstanojevic.me/api/tle/${ISS_NORAD}`,
-      parser: (data) => {
-        if (data && data.line1 && data.line2) return { l1: data.line1, l2: data.line2 };
-        return null;
-      }
-    },
-    {
-      name: 'Wheretheiss.at',
-      url: `https://api.wheretheiss.at/v1/satellites/${ISS_NORAD}/tles`,
-      parser: (data) => {
-        if (data && data.line1 && data.line2) return { l1: data.line1, l2: data.line2 };
-        return null;
-      }
-    },
-  ];
-
-  for (const src of sources) {
-    try {
-      console.log(`🌐 Essai ${src.name}…`);
-      const res = await fetch(src.url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const parsed = src.parser(data);
-      if (parsed) {
-        issSatrec = satellite.twoline2satrec(parsed.l1, parsed.l2);
-        console.log(`✅ TLE ISS chargé depuis ${src.name}`);
-        document.getElementById('tle-source').textContent = src.name;
-        setStatus(`🛰️ Poursuite active — Source : ${src.name}`);
-        return true;
-      }
-    } catch (e) {
-      console.warn(`❌ ${src.name} :`, e.message);
-    }
-  }
-
-  console.warn('⚠️ Toutes les sources ont échoué, TLE local');
-  issSatrec = satellite.twoline2satrec(FALLBACK_TLE.line1, FALLBACK_TLE.line2);
-  document.getElementById('tle-source').textContent = 'local (périmé)';
-  setStatus('⚠️ TLE local (périmé) — position approximative');
-  return true;
-}
-
-/* ============================================================
- *  POSITION ISS
- * ============================================================ */
-function computeISSPosition() {
-  if (!issSatrec) return null;
-  const now = new Date();
-  const gmst = satellite.gstime(now);
-  const pv = satellite.propagate(issSatrec, now);
-  if (!pv.position || !pv.velocity) return null;
-  const geo = satellite.eciToGeodetic(pv.position, gmst);
-  const speed = Math.sqrt(
-    pv.velocity.x ** 2 + pv.velocity.y ** 2 + pv.velocity.z ** 2
-  );
-  const meanMotion = issSatrec.no;
-  const period = (2 * Math.PI) / meanMotion;
-  const lat = satellite.degreesLat(geo.latitude);
-  const lon = satellite.degreesLong(geo.longitude);
-
-  let heading = 0;
-  if (state.lastPos) {
-    const dLon = lon - state.lastPos.lon;
-    const dLat = lat - state.lastPos.lat;
-    heading = Math.atan2(dLon, dLat) * 180 / Math.PI;
-    if (heading < 0) heading += 360;
-  }
-  state.lastPos = { lat, lon };
-
-  return { lat, lon, alt: geo.height, speed, heading, period };
-}
-
-/* ============================================================
- *  AVIONS ADS-B (via Worker + retry)
- * ============================================================ */
-function isMilitary(icao24, callsign) {
-  const cs = (callsign || "").toUpperCase();
-  for (const p of MILITARY_PREFIXES) if (cs.startsWith(p)) return true;
-  const ic = (icao24 || "").toLowerCase();
-  for (const p of MILITARY_ICAO_PREFIXES) if (ic.startsWith(p)) return true;
-  return false;
-}
-
+// ============================================================
+// Utilitaires
+// ============================================================
 function azEl(obsLat, obsLon, obsAlt, lat, lon, altKm) {
   const R = 6371.0;
   const latR = obsLat * Math.PI / 180;
@@ -919,78 +459,141 @@ function azEl(obsLat, obsLon, obsAlt, lat, lon, altKm) {
   return { az, el, dist };
 }
 
+function isMilitary(icao24, callsign) {
+  const cs = (callsign || "").toUpperCase();
+  for (const p of CONFIG.militaryPrefixes) if (cs.startsWith(p)) return true;
+  const ic = (icao24 || "").toLowerCase();
+  for (const p of CONFIG.militaryIcaoPrefixes) if (ic.startsWith(p)) return true;
+  return false;
+}
+
+function formatUTC() {
+  return new Date().toISOString().slice(11, 19);
+}
+
+function planeColor(p) {
+  if (p.military) return "#f85149";
+  if (p.altFt > 30000) return "#d29922";
+  if (p.altFt > 10000) return "#58a6ff";
+  return "#3fb950";
+}
+
+function satColor(s) {
+  if (s.alt >= 30000) return "#f85149";
+  if (s.alt >= 2000) return "#e3b341";
+  if (s.alt >= 500) return "#d29922";
+  return "#3fb950";
+}
+
+// ============================================================
+// Fetch via Worker avec retry + backoff 30s
+// ============================================================
+async function fetchViaWorker(targetUrl, timeoutMs = 15000, maxRetries = 3) {
+  const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(proxyUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+
+      // 429 : cooldown 30s minimum (documenté adsb.lol)
+      if (res.status === 429) {
+        const wait = Math.max(30000, Math.pow(2, attempt) * 15000);
+        console.warn(`⏳ 429 reçu (tentative ${attempt + 1}/${maxRetries}), cooldown ${wait/1000}s…`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const text = await res.text();
+      try { return JSON.parse(text); } catch { return text; }
+    } catch (e) {
+      clearTimeout(timeout);
+      if (attempt === maxRetries - 1) {
+        throw new Error(`Worker (après ${maxRetries} tentatives): ${e.message}`);
+      }
+      const wait = Math.pow(2, attempt) * 5000;
+      console.warn(`⚠️ Erreur (${e.message}), retry dans ${wait/1000}s…`);
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+  throw new Error('Worker: retries épuisés');
+}
+
+// ============================================================
+// Fetch avions — ALTERNANCE adsb.lol ↔ adsb.fi
+// ============================================================
 async function fetchPlanes() {
   const { lat, lon } = state.zone;
-  const radius = state.radiusNm;
-  const targetUrl = `https://api.adsb.lol/v2/point/${lat}/${lon}/${radius}`;
+  const radius = CONFIG.radiusNm;
+
+  // Alterner à chaque appel
+  state.useAdsbFi = !state.useAdsbFi;
+
+  let targetUrl, sourceName;
+  if (state.useAdsbFi) {
+    targetUrl = `https://opendata.adsb.fi/api/v3/lat/${lat}/lon/${lon}/dist/${radius}`;
+    sourceName = 'adsb.fi';
+  } else {
+    targetUrl = `https://api.adsb.lol/v2/point/${lat}/${lon}/${radius}`;
+    sourceName = 'adsb.lol';
+  }
 
   try {
-    console.log(`📡 ADS-B via Worker…`);
-    const data = await fetchViaWorker(targetUrl, 15000, 3);
+    console.log(`📡 ADS-B via ${sourceName}…`);
+    const data = await fetchViaWorker(targetUrl, 15000, 2);
 
-    if (!data || !Array.isArray(data.ac)) {
-      throw new Error('Format invalide');
-    }
+    // adsb.lol et adsb.fi retournent tous deux "ac"
+    const ac = data.ac || [];
+    if (!Array.isArray(ac)) throw new Error('Format invalide');
 
-    const aircraft = data.ac;
-    console.log(`✅ ADS-B: ${aircraft.length} avions (cache: ${state.cacheHits}H/${state.cacheMiss}M)`);
-    state.adsbSource = 'adsb.lol (Worker)';
-    state.adsbError = null;
+    console.log(`✅ ADS-B: ${ac.length} avions via ${sourceName}`);
+    state.currentSource = sourceName;
+    const srcEl = document.getElementById('source-name');
+    if (srcEl) srcEl.textContent = sourceName;
 
     const planes = [];
-    for (const a of aircraft) {
-      try {
-        if (a.lat == null || a.lon == null) continue;
-        if (a.alt_baro === "ground" || a.alt_baro == null) continue;
-
-        const altFt = typeof a.alt_baro === "number" ? a.alt_baro : 0;
-        const altM = Math.round(altFt * 0.3048);
-        const altKm = altM / 1000;
-        const velKmh = a.gs != null ? Math.round(a.gs * 1.852) : null;
-
-        const { az, el, dist } = azEl(lat, lon, 0.015, a.lat, a.lon, altKm);
-
-        const icao24 = (a.hex || "").toLowerCase();
-        const callsign = (a.flight || "").trim() || icao24;
-        const mil = isMilitary(icao24, callsign);
-
-        planes.push({
-          icao24, callsign,
-          lat: a.lat, lon: a.lon,
-          altFt, altM, velKmh,
-          heading: a.track,
-          az, el, dist,
-          military: mil
-        });
-      } catch (e) { continue; }
+    for (const a of ac) {
+      if (a.lat == null || a.lon == null) continue;
+      if (a.alt_baro === "ground" || a.alt_baro == null) continue;
+      const altFt = typeof a.alt_baro === "number" ? a.alt_baro : 0;
+      const altM = Math.round(altFt * 0.3048);
+      const altKm = altM / 1000;
+      const velKmh = a.gs != null ? Math.round(a.gs * 1.852) : null;
+      const { az, el, dist } = azEl(state.zone.lat, state.zone.lon, 0.015, a.lat, a.lon, altKm);
+      const icao24 = (a.hex || "").toLowerCase();
+      const callsign = (a.flight || "").trim() || icao24;
+      const mil = isMilitary(icao24, callsign);
+      planes.push({
+        icao24, callsign, lat: a.lat, lon: a.lon,
+        altFt, altM, velKmh, heading: a.track,
+        az, el, dist, military: mil
+      });
     }
-
     planes.sort((a, b) => a.dist - b.dist);
     return planes;
   } catch (e) {
-    console.error("Erreur fetch avions:", e);
-    state.adsbError = e.message;
+    console.error(`Erreur fetch avions (${sourceName}):`, e);
     return [];
   }
 }
 
-/* ============================================================
- *  CATALOGUE SATELLITES (via Worker)
- * ============================================================ */
+// ============================================================
+// Fetch satellites SGP4 (via Worker)
+// ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
-
   const celestrakUrl = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json";
-  const catalogStatusEl = document.getElementById('catalog-status');
-  if (catalogStatusEl) catalogStatusEl.textContent = '…';
-
   try {
     console.log('📡 Chargement catalogue CelesTrak via Worker…');
     const catalog = await fetchViaWorker(celestrakUrl, 30000, 2);
 
     if (!Array.isArray(catalog)) {
-      console.error("Catalogue non-tableau :", typeof catalog);
-      throw new Error("Catalogue invalide");
+      throw new Error("Catalogue invalide (pas un tableau)");
     }
     if (catalog.length === 0) {
       throw new Error("Catalogue vide");
@@ -1004,27 +607,17 @@ async function loadSatelliteCatalog() {
         const l1 = sat.TLE_LINE1;
         const l2 = sat.TLE_LINE2;
         if (!l1 || !l2) continue;
-
         const satrec = satellite.twoline2satrec(l1, l2);
         if (satrec && satrec.error === 0) {
-          satrecs.push({
-            satrec,
-            name: sat.OBJECT_NAME || 'INCONNU',
-            norad: sat.NORAD_CAT_ID
-          });
+          satrecs.push({ satrec, name: sat.OBJECT_NAME, norad: sat.NORAD_CAT_ID });
         }
       } catch (e) { continue; }
     }
-
     state.satrecs = satrecs;
     state.catalogLoaded = true;
-    state.catalogError = null;
-    if (catalogStatusEl) catalogStatusEl.textContent = `${satrecs.length} sats`;
-    console.log(`✅ ${satrecs.length} satellites SGP4 prêts`);
+    console.log(`✅ ${satrecs.length} satellites SGP4 chargés`);
   } catch (e) {
     console.error("Erreur chargement catalogue:", e);
-    state.catalogError = e.message;
-    if (catalogStatusEl) catalogStatusEl.textContent = 'ERREUR';
   }
 }
 
@@ -1037,18 +630,18 @@ function computeSatellites() {
 
   for (const { satrec, name, norad } of state.satrecs) {
     try {
-      const pv = satellite.propagate(satrec, now);
-      if (pv.error || !pv.position) continue;
-      const geo = satellite.eciToGeodetic(pv.position, gmst);
-      const lat = satellite.degreesLat(geo.latitude);
-      const lon = satellite.degreesLong(geo.longitude);
-      const alt = geo.height;
+      const positionAndVelocity = satellite.propagate(satrec, now);
+      if (positionAndVelocity.error) continue;
+      const positionEci = positionAndVelocity.position;
+      if (!positionEci) continue;
 
-      const { az, el, dist } = azEl(
-        state.zone.lat, state.zone.lon, 0.015,
-        lat, lon, alt
-      );
-      if (el < 5) continue;
+      const positionGd = satellite.eciToGeodetic(positionEci, gmst);
+      const lon = satellite.degreesLong(positionGd.longitude);
+      const lat = satellite.degreesLat(positionGd.latitude);
+      const alt = positionGd.height;
+
+      const { az, el, dist } = azEl(state.zone.lat, state.zone.lon, 0.015, lat, lon, alt);
+      if (el < CONFIG.minElevation) continue;
 
       sats.push({ norad, name, lat, lon, alt, az, el, dist });
     } catch (e) { continue; }
@@ -1068,6 +661,7 @@ function filterSatellites(sats) {
       case "meo": return alt >= 2000 && alt < 30000;
       case "geo": return alt >= 30000;
       case "starlink": return n.includes("STARLINK");
+      case "oneweb": return n.includes("ONEWEB");
       case "nav": return ["GPS","GALILEO","GLONASS","BEIDOU","NAVSTAR","GSAT"].some(x => n.includes(x));
       case "stations": return ["ISS","CSS","TIANHE","ZARYA"].some(x => n.includes(x));
       default: return true;
@@ -1075,156 +669,234 @@ function filterSatellites(sats) {
   });
 }
 
-/* ============================================================
- *  BOUCLE PRINCIPALE
- * ============================================================ */
-async function refreshAdsB() {
+// ============================================================
+// Rendu carte
+// ============================================================
+function clearMarkers() {
+  for (const m of state.planeMarkers) map.removeLayer(m);
+  for (const m of state.satMarkers) map.removeLayer(m);
+  state.planeMarkers = [];
+  state.satMarkers = [];
+}
+
+function renderMarkers(planes, sats) {
+  clearMarkers();
+
+  if (state.observerMarker) map.removeLayer(state.observerMarker);
+  state.observerMarker = L.marker([state.zone.lat, state.zone.lon], {
+    icon: L.divIcon({
+      className: 'observer-marker',
+      html: '<div class="observer-dot"></div>',
+      iconSize: [12, 12],
+      iconAnchor: [6, 6]
+    })
+  }).addTo(map).bindPopup(`<b>${state.zone.name}</b><br>Station d'observation`);
+
+  if (coverageCircle) map.removeLayer(coverageCircle);
+  coverageCircle = L.circle([state.zone.lat, state.zone.lon], {
+    radius: CONFIG.radiusNm * 1852,
+    color: '#58a6ff',
+    fillColor: '#58a6ff',
+    fillOpacity: 0.05,
+    weight: 1,
+    dashArray: '5,5'
+  }).addTo(map);
+
+  const planesToShow = state.militaryOnly ? planes.filter(p => p.military) : planes;
+  for (const p of planesToShow) {
+    const color = planeColor(p);
+    const marker = L.marker([p.lat, p.lon], {
+      icon: L.divIcon({
+        className: 'plane-marker',
+        html: `<div class="plane-dot ${p.military ? 'mil' : ''}" style="background:${color};color:${color}"></div>`,
+        iconSize: [8, 8],
+        iconAnchor: [4, 4]
+      })
+    }).addTo(map);
+
+    marker.bindPopup(`
+      <b>${p.callsign}</b>${p.military ? ' ✈️' : ''}<br>
+      ICAO24 : ${p.icao24}<br>
+      Altitude : ${p.altFt.toLocaleString()} ft<br>
+      Vitesse : ${p.velKmh || '—'} km/h<br>
+      Cap : ${p.heading ? p.heading.toFixed(0) + '°' : '—'}<br>
+      Distance : ${p.dist.toFixed(1)} km<br>
+      Azimut : ${p.az.toFixed(1)}°<br>
+      Élévation : ${p.el.toFixed(1)}°
+    `);
+
+    state.planeMarkers.push(marker);
+  }
+
+  if (state.showSatellites) {
+    const filteredSats = filterSatellites(sats);
+    for (const s of filteredSats) {
+      const color = satColor(s);
+      const marker = L.marker([s.lat, s.lon], {
+        icon: L.divIcon({
+          className: 'sat-marker',
+          html: `<div class="sat-dot" style="background:${color};color:${color}"></div>`,
+          iconSize: [8, 8],
+          iconAnchor: [4, 4]
+        })
+      }).addTo(map);
+
+      marker.bindPopup(`
+        <b>${s.name}</b><br>
+        NORAD : ${s.norad}<br>
+        Altitude : ${s.alt.toFixed(0)} km<br>
+        Distance : ${s.dist.toFixed(1)} km<br>
+        Azimut : ${s.az.toFixed(1)}°<br>
+        Élévation : ${s.el.toFixed(1)}°
+      `);
+
+      state.satMarkers.push(marker);
+    }
+  }
+}
+
+// ============================================================
+// Rendu listes
+// ============================================================
+function renderPlanesList(planes) {
+  const el = document.getElementById("planes-list");
+  const filtered = state.militaryOnly ? planes.filter(p => p.military) : planes;
+  const items = filtered.slice(0, CONFIG.maxListItems);
+  if (items.length === 0) {
+    el.innerHTML = '<div class="loading">Aucun avion dans la zone</div>';
+    return;
+  }
+  el.innerHTML = items.map(p => `
+    <div class="list-item" data-lat="${p.lat}" data-lon="${p.lon}">
+      <span class="cs ${p.military ? 'mil' : ''}">${p.callsign}</span>
+      <span class="num">${p.altFt.toLocaleString()} ft</span>
+      <span class="num">${p.velKmh || "—"} km/h</span>
+      <span class="num highlight">${p.dist.toFixed(0)} km</span>
+    </div>
+  `).join("");
+
+  el.querySelectorAll(".list-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const lat = parseFloat(item.dataset.lat);
+      const lon = parseFloat(item.dataset.lon);
+      map.setView([lat, lon], 10);
+    });
+  });
+}
+
+function renderSatsList(sats) {
+  const el = document.getElementById("sats-list");
+  const filtered = filterSatellites(sats);
+  const items = filtered.slice(0, CONFIG.maxListItems);
+  if (items.length === 0) {
+    el.innerHTML = '<div class="loading">Aucun satellite visible</div>';
+    return;
+  }
+  el.innerHTML = items.map(s => `
+    <div class="list-item" data-lat="${s.lat}" data-lon="${s.lon}">
+      <span class="cs">${s.name}</span>
+      <span class="num">${s.alt.toFixed(0)} km</span>
+      <span class="num">${s.el.toFixed(1)}°</span>
+      <span class="num highlight">${s.dist.toFixed(0)} km</span>
+    </div>
+  `).join("");
+
+  el.querySelectorAll(".list-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const lat = parseFloat(item.dataset.lat);
+      const lon = parseFloat(item.dataset.lon);
+      map.setView([lat, lon], 5);
+    });
+  });
+}
+
+// ============================================================
+// Refresh global
+// ============================================================
+async function refresh() {
+  const utc = formatUTC();
+  document.getElementById("stat-utc").textContent = utc;
+  document.getElementById("ov-utc").textContent = utc;
+  document.getElementById("stat-zone").textContent = state.zone.name.split(" ")[0];
+  document.getElementById("ov-zone").textContent = state.zone.name.split(" ")[0];
+
   const planes = await fetchPlanes();
   state.planes = planes;
-  state.lastAdsBFetch = Date.now();
-  const adsbStatus = state.adsbError
-    ? `Erreur: ${state.adsbError.slice(0, 30)}`
-    : `${state.adsbSource} (${planes.length})`;
-  const el = document.getElementById('adsb-source');
-  if (el) el.textContent = adsbStatus;
-  renderTelemesuresPlanes(planes);
-}
+  const milCount = planes.filter(p => p.military).length;
+  document.getElementById("stat-planes").textContent = planes.length;
+  document.getElementById("stat-mil").textContent = milCount;
+  document.getElementById("planes-count").textContent = planes.length;
+  document.getElementById("ov-planes").textContent = planes.length;
+  document.getElementById("ov-mil").textContent = milCount;
 
-async function refreshAll() {
-  await refreshAdsB();
   await loadSatelliteCatalog();
-  if (state.catalogLoaded) {
-    const sats = computeSatellites();
-    state.satellites = filterSatellites(sats);
-    renderTelemesuresSats(state.satellites);
-  }
+  const sats = computeSatellites();
+  state.satellites = sats;
+  document.getElementById("stat-sats").textContent = sats.length;
+  document.getElementById("sats-count").textContent = sats.length;
+  document.getElementById("ov-sats").textContent = sats.length;
+
+  renderMarkers(planes, sats);
+  renderPlanesList(planes);
+  renderSatsList(sats);
 }
 
-let lastUpdate = 0;
-let lastAdsBRefresh = 0;
-
-function loop(ts) {
-  if (!state.paused && state.baseGrid && ts - lastUpdate > 1000) {
-    lastUpdate = ts;
-
-    const pos = computeISSPosition();
-    if (pos) {
-      state.issTrack.push({ lon: pos.lon, lat: pos.lat });
-      if (state.issTrack.length > TRACK_MAX) state.issTrack.shift();
+// ============================================================
+// Countdown + auto-refresh
+// ============================================================
+function startCountdown() {
+  state.countdown = CONFIG.refreshInterval;
+  setInterval(() => {
+    state.countdown--;
+    document.getElementById("countdown").textContent = state.countdown;
+    if (state.countdown <= 0) {
+      state.countdown = CONFIG.refreshInterval;
+      refresh();
     }
-
-    if (state.catalogLoaded && ts - state.lastSatsCompute > SATS_REFRESH_MS) {
-      state.lastSatsCompute = ts;
-      const sats = computeSatellites();
-      state.satellites = filterSatellites(sats);
-      renderTelemesuresSats(state.satellites);
-    }
-
-    if (ts - lastAdsBRefresh > ADSB_REFRESH_MS) {
-      lastAdsBRefresh = ts;
-      refreshAdsB().catch(e => console.warn('ADS-B refresh échoué:', e));
-    }
-
-    renderGrid(state.baseGrid, pos);
-    renderTelemesures(pos);
-  }
-  requestAnimationFrame(loop);
+  }, 1000);
 }
 
-/* ============================================================
- *  UI
- * ============================================================ */
-function setStatus(msg) {
-  const el = document.getElementById('status');
-  if (el) el.textContent = msg;
-}
-
-document.getElementById('btn-toggle').addEventListener('click', (e) => {
-  state.paused = !state.paused;
-  e.target.textContent = state.paused ? '▶ Reprendre' : '⏸ Pause';
-  e.target.classList.toggle('active', state.paused);
-});
-
-document.getElementById('btn-refresh').addEventListener('click', async () => {
-  setStatus('🔄 Rechargement complet…');
-  await loadTLE();
-  state.catalogLoaded = false;
-  await refreshAll();
-  setStatus('✅ Rechargement terminé');
-});
-
-document.getElementById('btn-clear').addEventListener('click', () => {
-  state.issTrack = [];
-  renderGrid(state.baseGrid, computeISSPosition());
-});
-
-document.getElementById('btn-toggle-planes').addEventListener('click', (e) => {
-  state.planesVisible = !state.planesVisible;
-  e.target.classList.toggle('active', !state.planesVisible);
-  renderGrid(state.baseGrid, computeISSPosition());
-});
-
-document.getElementById('btn-toggle-sats').addEventListener('click', (e) => {
-  state.satsVisible = !state.satsVisible;
-  e.target.classList.toggle('active', !state.satsVisible);
-  renderGrid(state.baseGrid, computeISSPosition());
-});
-
-document.getElementById('btn-mil-only').addEventListener('click', (e) => {
-  state.militaryOnly = !state.militaryOnly;
-  e.target.classList.toggle('active', state.militaryOnly);
-  renderGrid(state.baseGrid, computeISSPosition());
-});
-
-document.getElementById('zone-select').addEventListener('change', async (e) => {
-  const [lat, lon, name] = e.target.value.split(',');
+// ============================================================
+// Événements
+// ============================================================
+document.getElementById("zone-select").addEventListener("change", (e) => {
+  const [lat, lon, name] = e.target.value.split(",");
   state.zone = { lat: parseFloat(lat), lon: parseFloat(lon), name };
-  setStatus(`📍 Zone : ${name}`);
-  await refreshAdsB();
-  renderGrid(state.baseGrid, computeISSPosition());
+  map.setView([state.zone.lat, state.zone.lon], 7);
+  refresh();
 });
 
-document.getElementById('radius-select').addEventListener('change', async (e) => {
-  state.radiusNm = parseInt(e.target.value);
-  setStatus(`📡 Rayon : ${state.radiusNm} nm`);
-  await refreshAdsB();
-});
-
-document.getElementById('sat-filter').addEventListener('change', (e) => {
+document.getElementById("sat-filter").addEventListener("change", (e) => {
   state.satFilter = e.target.value;
-  if (state.catalogLoaded) {
-    const sats = computeSatellites();
-    state.satellites = filterSatellites(sats);
-    renderTelemesuresSats(state.satellites);
-    renderGrid(state.baseGrid, computeISSPosition());
-  }
+  renderMarkers(state.planes, state.satellites);
+  renderSatsList(state.satellites);
+  const filtered = filterSatellites(state.satellites);
+  document.getElementById("sats-count").textContent = filtered.length;
+  document.getElementById("stat-sats").textContent = filtered.length;
+  document.getElementById("ov-sats").textContent = filtered.length;
 });
 
-/* ============================================================
- *  DÉMARRAGE
- * ============================================================ */
-(async function init() {
-  if (typeof satellite === 'undefined') {
-    setStatus('❌ satellite.js non chargé');
-    return;
-  }
-  document.getElementById('copyrightYear').textContent = new Date().getFullYear();
-  setStatus('Chargement de la carte…');
-  const ok = await loadLand();
-  if (!ok) {
-    setStatus('❌ GeoJSON Natural Earth inaccessible');
-    return;
-  }
-  setStatus('Génération de la grille…');
-  state.baseGrid = buildGrid();
-  renderGrid(state.baseGrid);
-  await loadTLE();
-  setStatus('Chargement ADS-B + satellites…');
-  await refreshAll();
-  setStatus(`✅ Systèmes opérationnels — Zone : ${state.zone.name}`);
-  requestAnimationFrame(loop);
-})();
-</script>
+document.getElementById("btn-refresh").addEventListener("click", refresh);
 
+document.getElementById("btn-toggle-mil").addEventListener("click", (e) => {
+  state.militaryOnly = !state.militaryOnly;
+  e.target.classList.toggle("active", state.militaryOnly);
+  renderMarkers(state.planes, state.satellites);
+  renderPlanesList(state.planes);
+});
+
+document.getElementById("btn-toggle-sats").addEventListener("click", (e) => {
+  state.showSatellites = !state.showSatellites;
+  e.target.classList.toggle("active", state.showSatellites);
+  renderMarkers(state.planes, state.satellites);
+});
+
+// ============================================================
+// Init
+// ============================================================
+map.setView([state.zone.lat, state.zone.lon], 7);
+refresh();
+startCountdown();
+</script>
 </body>
 </html>
