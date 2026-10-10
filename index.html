@@ -1017,7 +1017,6 @@ async function fetchPlanes() {
 
     console.log(`✅ PocketWorld: ${data.flight_rows.length} avions (total global: ${data.total})`);
 
-    // Source affichée dans l'overlay
     const providers = data.providers || {};
     const active = Object.entries(providers)
       .filter(([k, v]) => v > 0)
@@ -1049,8 +1048,6 @@ async function fetchPlanes() {
 
       const altFt = Math.round(altM * 3.28084);
       const altKm = altM / 1000;
-
-      // velocity PocketWorld est déjà en km/h
       const velKmh = row[F.velocity] != null ? Math.round(row[F.velocity]) : null;
 
       const icao24 = (row[F.icao24] || "").toLowerCase();
