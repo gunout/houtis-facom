@@ -710,8 +710,8 @@ body {
   <div>République Française — Ministère des Armées</div>
   <div class="mention-legale">
     Cellule de veille stratégique · Surveillance aérienne ADS-B et orbitale SGP4<br>
-    Sources : adsb.fi (via Deno Deploy) · CelesTrak · OpenStreetMap<br>
-    Traitement : Deno Deploy · satellite.js · Leaflet · Export CSV
+    Sources : PocketWorld (adsb.fi + OpenSky + adsb.lol) · CelesTrak · OpenStreetMap<br>
+    Traitement : Cloudflare Workers · satellite.js · Leaflet · Export CSV
   </div>
   <div class="copyright-footer">
     © <span id="copyrightYear">2026</span> · <span class="sig">HOUTIS-FACOM</span> · gunout · Tous droits réservés
@@ -721,12 +721,17 @@ body {
 <script>
 'use strict';
 
+// ============================================================
+// CONFIG
+// ============================================================
 const CONFIG = {
   refreshInterval: 120,
   radiusNm: 250,
   minElevation: 5,
   maxListItems: 30,
-  workerUrl: 'https://facom.gunout.deno.net',
+  workerUrl: 'https://radar-proxy.gunout.workers.dev',
+  // Zone fixe : détroit d'Ormuz (west,south,east,north)
+  ormuzBbox: '55,25.5,57.5,27.5',
   militaryPrefixes: [
     "RCH","REACH","DUKE","MAGIC","HAWK","VIPER","TITAN","SPAR","EVAC",
     "ASCOT","JAKE","HOMER","PYTHON","RRR","RFR","TARTAN","FAF","COTAM",
@@ -740,6 +745,9 @@ const CONFIG = {
   ]
 };
 
+// ============================================================
+// STATE
+// ============================================================
 const state = {
   zone: { lat: 26.57, lon: 56.25, name: "Détroit d'Ormuz" },
   planes: [],
@@ -851,14 +859,16 @@ function stopAutoCsv() {
 }
 
 // ============================================================
-// FIN EXPORT CSV
+// VISIBILITY
 // ============================================================
-
 document.addEventListener('visibilitychange', () => {
   state.isVisible = !document.hidden;
   console.log(state.isVisible ? '▶️ Onglet visible' : '⏸️ Onglet caché — pause');
 });
 
+// ============================================================
+// MAP
+// ============================================================
 const map = L.map('map', {
   center: [state.zone.lat, state.zone.lon],
   zoom: 6,
@@ -873,6 +883,9 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 let coverageCircle = null;
 
+// ============================================================
+// GÉOMÉTRIE
+// ============================================================
 function azEl(obsLat, obsLon, obsAlt, lat, lon, altKm) {
   const R = 6371.0;
   const latR = obsLat * Math.PI / 180;
@@ -929,6 +942,9 @@ function satColor(s) {
   return "#3fb950";
 }
 
+// ============================================================
+// OMM -> TLE
+// ============================================================
 function ommToTle(sat) {
   try {
     const norad = String(sat.NORAD_CAT_ID).padStart(5, '0');
@@ -975,52 +991,102 @@ function ommToTle(sat) {
   }
 }
 
+// ============================================================
+// FETCH AVIONS — PocketWorld via Worker
+// ============================================================
 async function fetchPlanes() {
-  const { lat, lon } = state.zone;
-  const radius = CONFIG.radiusNm;
-  const targetUrl = `https://opendata.adsb.fi/api/v3/lat/${lat}/lon/${lon}/dist/${radius}`;
-  const proxyUrl = `${CONFIG.workerUrl}?url=${encodeURIComponent(targetUrl)}`;
+  const targetUrl = `https://pocketworld.org/api/flights?wire=1&bbox=${CONFIG.ormuzBbox}`;
+  const proxyUrl = `${CONFIG.workerUrl}/?url=${encodeURIComponent(targetUrl)}`;
 
   try {
-    console.log(`📡 ADS-B via Deno Deploy…`);
+    console.log(`📡 PocketWorld (via Worker)…`);
     const res = await fetch(proxyUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const ac = data.ac || [];
-    if (!Array.isArray(ac)) throw new Error('Format invalide');
+    const text = await res.text();
 
-    console.log(`✅ ADS-B: ${ac.length} avions`);
-    state.currentSource = 'adsb.fi (Deno)';
+    if (!text.trim().startsWith("{")) {
+      console.warn(`⚠️ Réponse non-JSON (HTTP ${res.status})`);
+      return [];
+    }
+
+    const data = JSON.parse(text);
+
+    if (!data.flight_rows || !Array.isArray(data.flight_rows)) {
+      console.warn(`⚠️ Aucun flight_rows dans la réponse`);
+      return [];
+    }
+
+    console.log(`✅ PocketWorld: ${data.flight_rows.length} avions (total global: ${data.total})`);
+
+    // Source affichée dans l'overlay
+    const providers = data.providers || {};
+    const active = Object.entries(providers)
+      .filter(([k, v]) => v > 0)
+      .map(([k]) => k)
+      .join(' + ') || 'PocketWorld';
+    state.currentSource = active;
     const srcEl = document.getElementById('source-name');
-    if (srcEl) srcEl.textContent = 'adsb.fi (Deno)';
+    if (srcEl) srcEl.textContent = active;
+
+    // Ordre des colonnes PocketWorld (flight_fields)
+    const F = {
+      icao24: 0, callsign: 1, country: 2, lat: 3, lng: 4,
+      alt: 5, velocity: 6, heading: 7, on_ground: 10,
+      registration: 12, model: 14, typecode: 15
+    };
 
     const planes = [];
-    for (const a of ac) {
-      if (a.lat == null || a.lon == null) continue;
-      if (!isValidCoord(a.lat, a.lon)) continue;
-      if (a.alt_baro === "ground" || a.alt_baro == null) continue;
-      const altFt = typeof a.alt_baro === "number" ? a.alt_baro : 0;
-      const altM = Math.round(altFt * 0.3048);
+    for (const row of data.flight_rows) {
+      if (!Array.isArray(row)) continue;
+
+      const lat = row[F.lat];
+      const lon = row[F.lng];
+      if (lat == null || lon == null) continue;
+      if (!isValidCoord(lat, lon)) continue;
+      if (row[F.on_ground] === true) continue;
+
+      const altM = row[F.alt];
+      if (altM == null || !isFinite(altM)) continue;
+
+      const altFt = Math.round(altM * 3.28084);
       const altKm = altM / 1000;
-      const velKmh = a.gs != null ? Math.round(a.gs * 1.852) : null;
-      const { az, el, dist } = azEl(state.zone.lat, state.zone.lon, 0.015, a.lat, a.lon, altKm);
-      const icao24 = (a.hex || "").toLowerCase();
-      const callsign = (a.flight || "").trim() || icao24;
+
+      // velocity PocketWorld est déjà en km/h
+      const velKmh = row[F.velocity] != null ? Math.round(row[F.velocity]) : null;
+
+      const icao24 = (row[F.icao24] || "").toLowerCase();
+      const callsignRaw = (row[F.callsign] || "").trim();
+      const callsign = callsignRaw || row[F.registration] || icao24;
+
       const mil = isMilitary(icao24, callsign);
+      const { az, el, dist } = azEl(state.zone.lat, state.zone.lon, 0.015, lat, lon, altKm);
+
       planes.push({
-        icao24, callsign, lat: a.lat, lon: a.lon,
-        altFt, altM, velKmh, heading: a.track,
-        az, el, dist, military: mil
+        icao24,
+        callsign,
+        lat,
+        lon,
+        altFt,
+        altM: Math.round(altM),
+        velKmh,
+        heading: row[F.heading],
+        az, el, dist,
+        military: mil,
+        model: row[F.model] || row[F.typecode] || null
       });
     }
+
     planes.sort((a, b) => a.dist - b.dist);
     return planes;
+
   } catch (e) {
     console.error(`Erreur fetch avions:`, e.message);
     return [];
   }
 }
 
+// ============================================================
+// CATALOGUE SATELLITES
+// ============================================================
 async function loadSatelliteCatalog() {
   if (state.catalogLoaded) return;
 
@@ -1118,6 +1184,9 @@ async function loadSatelliteCatalog() {
   console.log(`   ${noTle} sans données | ${badTle} TLE courts | ${sgp4Error} erreurs SGP4`);
 }
 
+// ============================================================
+// CALCUL SATELLITES
+// ============================================================
 function computeSatellites() {
   if (!state.satrecs.length) return [];
   const now = new Date();
@@ -1160,6 +1229,9 @@ function filterSatellites(sats) {
   });
 }
 
+// ============================================================
+// MARQUEURS
+// ============================================================
 function clearMarkers() {
   for (const m of state.planeMarkers) map.removeLayer(m);
   for (const m of state.satMarkers) map.removeLayer(m);
@@ -1203,6 +1275,7 @@ function renderMarkers(planes, sats) {
       marker.bindPopup(`
         <b>${p.callsign}${p.military ? ' 🎖️' : ''}</b>
         ICAO24 : ${p.icao24}<br>
+        ${p.model ? 'Modèle : ' + p.model + '<br>' : ''}
         Altitude : ${p.altFt.toLocaleString()} ft<br>
         Vitesse : ${p.velKmh || '—'} km/h<br>
         Cap : ${p.heading ? p.heading.toFixed(0) + '°' : '—'}<br>
@@ -1245,6 +1318,9 @@ function renderMarkers(planes, sats) {
   }
 }
 
+// ============================================================
+// LISTES
+// ============================================================
 function renderPlanesList(planes) {
   const el = document.getElementById("planes-list");
   const filtered = state.militaryOnly ? planes.filter(p => p.military) : planes;
@@ -1299,6 +1375,9 @@ function renderSatsList(sats) {
   });
 }
 
+// ============================================================
+// REFRESH
+// ============================================================
 async function refresh() {
   if (!state.isVisible) { console.log('⏸️ Refresh annulé (onglet caché)'); return; }
 
@@ -1342,6 +1421,9 @@ function startCountdown() {
   }, 1000);
 }
 
+// ============================================================
+// ÉVÉNEMENTS
+// ============================================================
 document.getElementById("zone-select").addEventListener("change", (e) => {
   const [lat, lon, name] = e.target.value.split(",");
   state.zone = { lat: parseFloat(lat), lon: parseFloat(lon), name };
@@ -1393,6 +1475,9 @@ document.getElementById("btn-toggle-auto-csv").addEventListener("click", (e) => 
   }
 });
 
+// ============================================================
+// DÉMARRAGE
+// ============================================================
 document.getElementById("copyrightYear").textContent = new Date().getFullYear();
 map.setView([state.zone.lat, state.zone.lon], 7);
 refresh();
